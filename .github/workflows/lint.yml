@@ -1,0 +1,92 @@
+# SPDX-FileCopyrightText: 2020 Benedict Harcourt <ben.harcourt@harcourtprogramming.co.uk>
+#
+# SPDX-License-Identifier: CC0-1.0
+# vim: expandtab ts=2 nospell
+
+name: Lint + Build + Publish
+
+on:
+  push:
+    branches:
+      - mainline
+  pull_request:
+  release:
+    types:
+      - published
+
+env:
+  SOURCES: prosegen bot.py setup.py
+
+jobs:
+  reuse-lint:
+    name: Check Reuse Compliance
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: REUSE Compliance Check
+      uses: fsfe/reuse-action@v1.1
+
+  py-lint:
+    name: Lint Python code
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+
+    - name: Setup Python 3.7
+      uses: actions/setup-python@v1
+      with:
+        python-version: 3.7
+
+    - name: Load Depedency Cache
+      id: cache
+      uses: actions/cache@v2
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('requirements*.txt') }}
+        restore-keys: ${{ runner.os }}-pip-
+
+    - name: Install dependencies
+      run:  pip install -r requirements-dev.txt
+
+    - name: Run PyLint
+      run: pylint ${{ env.SOURCES }} | python .github/workflows/pylint_to_gh_action.py
+
+
+  python-lint:
+    name: Lint Python code
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+
+    - name: Setup Python 3.7
+      uses: actions/setup-python@v1
+      with:
+        python-version: 3.7
+
+    - name: Load Depedency Cache
+      id: cache
+      uses: actions/cache@v2
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('requirements*.txt') }}
+        restore-keys: ${{ runner.os }}-pip-
+
+    - name: Install dependencies
+      run:  pip install -r requirements-dev.txt
+
+    - name: Run Linters
+      if: github.event_name != 'release'
+      uses: samuelmeuli/lint-action@v1
+      with:
+        github_token: ${{ secrets.github_token }}
+
+        black:     true
+        flake8:    true
+        mypy:      true
+        mypy_args: --strict
