@@ -5,6 +5,9 @@
 #
 # SPDX-License-Identifier: BSD-2-Clause
 
+# This fill will always have "too many lines"
+# pylint: disable=C0302
+
 from __future__ import annotations
 
 
