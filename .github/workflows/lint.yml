@@ -15,7 +15,7 @@ on:
       - published
 
 env:
-  SOURCES: prosegen bot.py setup.py
+  SOURCES: prosegen bot.py
 
 jobs:
   reuse-lint:
