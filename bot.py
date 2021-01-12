@@ -112,6 +112,9 @@ class Bot(commands.Bot):  # type: ignore
         self._timer = threading.Timer(next_call, lambda: asyncio.run(self.send_quote()))
         self._timer.start()
 
+    async def event_pubsub(self, data):
+        raise NotImplementedError
+
 
 if __name__ == "__main__":
     Bot().run()
