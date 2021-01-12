@@ -43,10 +43,14 @@ class Buffer:
             start = self.size + start
 
             if self.pos == 0:
-                strings = self.data[start : self.size]
+                segment = slice(start, self.size)
+                strings = self.data[segment]
             else:
-                strings = self.data[start : self.size] + self.data[0 : self.pos]
+                segment1 = slice(start, self.size)
+                segment2 = slice(0, self.pos)
+                strings = self.data[segment1] + self.data[segment2]
         else:
-            strings = self.data[start : self.pos]
+            segment = slice(start, self.pos)
+            strings = self.data[segment]
 
         return zlib.crc32(" ".join(strings).encode())

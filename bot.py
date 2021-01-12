@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 # vim: nospell expandtab ts=4
 
 # SPDX-FileCopyrightText: 2020 Benedict Harcourt <ben.harcourt@harcourtprogramming.co.uk>
@@ -7,19 +7,40 @@
 
 from __future__ import annotations
 
+from typing import Optional
 
 import asyncio
 import random
 import threading
+import time
 
 import requests
 from twitchio.ext import commands  # type: ignore
+from twitchio.dataclasses import Channel, Message  # type: ignore
 
 import prosegen
 
 
+# The time until retry after when we lack a functional connection to Twitch
+BACKOFF_STARTUP = (10, 10)
+# The time until retry wait when no-one has talked recently
+BACKOFF_NO_CHATTERS = (300, 300)
+# How long to wait between sending quotes
+BACKOFF_MESSAGE_SENT = (3000, 4200)
+
+# How recently someone must have messaged for the channel to be considered active.
+CHAT_ACTIVE_WINDOW = 360
+
+# How long a quote should be (to prevent one word quotes and sentences that
+# fill the entire screen).
+MESSAGE_LEN_MIN = 16
+MESSAGE_LEN_MAX = 80
+
+
 class Bot(commands.Bot):  # type: ignore
     prosegen: prosegen.ProseGen
+    target: Optional[Channel]
+    last_message: int
 
     def __init__(self) -> None:
         with open("twitch.token") as token:
@@ -32,6 +53,7 @@ class Bot(commands.Bot):  # type: ignore
 
         self.load_data()
         self.target = None
+        self.last_message = 0
         asyncio.run(self.send_quote())
 
     def load_data(self) -> None:
@@ -52,12 +74,11 @@ class Bot(commands.Bot):  # type: ignore
                 self.prosegen.add_knowledge(quote)
 
     def get_quote(self) -> str:
-        i = 0
-
-        while i < 100:
+        # Max 100 attempts to generate a quote
+        for _ in range(0, 100):
             wisdom = self.prosegen.make_statement()
 
-            if 16 < len(wisdom) < 80:
+            if MESSAGE_LEN_MIN < len(wisdom) < MESSAGE_LEN_MAX:
                 return wisdom
 
         return "I don't like coffee."
@@ -67,18 +88,26 @@ class Bot(commands.Bot):  # type: ignore
 
         self.target = self.get_channel("sergeyager")
 
+    async def event_message(self, message: Message) -> None:
+        if message.author.name.lower() == self.nick.lower():
+            return
+
+        self.last_message = int(time.time())
+
     async def send_quote(self) -> None:
-        if self.target:
-            quote = self.get_quote()
-            print(f"Sending '{quote}'")
-            await self.target.send(quote)
-
-            next_call = 3600 + random.randint(-600, 600)
-
-        else:
+        if not self.target:
             print("No target initialised")
 
-            next_call = 30
+            next_call = random.randint(*BACKOFF_STARTUP)
+        elif time.time() - self.last_message > CHAT_ACTIVE_WINDOW:
+
+            next_call = random.randint(*BACKOFF_NO_CHATTERS)
+
+        else:
+            quote = self.get_quote()
+            await self.target.send(quote)
+
+            next_call = random.randint(*BACKOFF_MESSAGE_SENT)
 
         self._timer = threading.Timer(next_call, lambda: asyncio.run(self.send_quote()))
         self._timer.start()

@@ -4,6 +4,7 @@
 #
 # SPDX-License-Identifier: BSD-2-Clause
 
+reuse lint
 black bot.py prosegen
 flake8 bot.py prosegen
 mypy --strict bot.py prosegen
