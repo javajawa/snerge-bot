@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 import asyncio
 import random
@@ -112,7 +112,7 @@ class Bot(commands.Bot):  # type: ignore
         self._timer = threading.Timer(next_call, lambda: asyncio.run(self.send_quote()))
         self._timer.start()
 
-    async def event_pubsub(self, data):
+    async def event_pubsub(self, data: Any) -> None:
         raise NotImplementedError
 
 
