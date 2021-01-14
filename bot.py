@@ -33,7 +33,7 @@ CHAT_ACTIVE_WINDOW = 360
 
 # How long a quote should be (to prevent one word quotes and sentences that
 # fill the entire screen).
-MESSAGE_LEN_MIN = 16
+MESSAGE_LEN_MIN = 24
 MESSAGE_LEN_MAX = 80
 
 
@@ -60,7 +60,7 @@ class Bot(commands.Bot):  # type: ignore
         data = requests.get(
             "https://raw.githubusercontent.com/RebelliousUno/BrewCrewQuoteDB/main/quotes.txt"
         )
-        self.prosegen = prosegen.ProseGen(8)
+        self.prosegen = prosegen.ProseGen(20)
 
         for line in data.text.split("\n"):
             line = line.strip()
@@ -68,15 +68,16 @@ class Bot(commands.Bot):  # type: ignore
             if not line:
                 continue
 
-            quotes = line.split('"')[1::2]
+            line_quotes = line.split('"')[1:]
 
-            for quote in quotes:
-                self.prosegen.add_knowledge(quote)
+            for quote, attr in zip(*[iter(line_quotes)] * 2):
+                if "Serge" in attr or "Snerge" in attr:
+                    self.prosegen.add_knowledge(quote)
 
     def get_quote(self) -> str:
         # Max 100 attempts to generate a quote
         for _ in range(0, 100):
-            wisdom = self.prosegen.make_statement()
+            wisdom = self.prosegen.make_statement(MESSAGE_LEN_MIN)
 
             if MESSAGE_LEN_MIN < len(wisdom) < MESSAGE_LEN_MAX:
                 return wisdom
@@ -97,16 +98,13 @@ class Bot(commands.Bot):  # type: ignore
     async def send_quote(self) -> None:
         if not self.target:
             print("No target initialised")
-
             next_call = random.randint(*BACKOFF_STARTUP)
-        elif time.time() - self.last_message > CHAT_ACTIVE_WINDOW:
 
+        elif time.time() - self.last_message > CHAT_ACTIVE_WINDOW:
             next_call = random.randint(*BACKOFF_NO_CHATTERS)
 
         else:
-            quote = self.get_quote()
-            await self.target.send(quote)
-
+            await self.target.send(self.get_quote())
             next_call = random.randint(*BACKOFF_MESSAGE_SENT)
 
         self._timer = threading.Timer(next_call, lambda: asyncio.run(self.send_quote()))

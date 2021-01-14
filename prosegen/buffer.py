@@ -36,21 +36,24 @@ class Buffer:
         if items < 1:
             raise Exception("Must hash at least one item")
 
+        return zlib.crc32(" ".join(self.subset(items)).encode())
+
+    def to_str(self, items: int) -> str:
+        return f"||{' '.join(self.subset(items))}||@{self.hash(items)}"
+
+    def subset(self, items: int) -> List[str]:
         start: int = self.pos - items
-        strings: List[str]
 
-        if start < 0:
-            start = self.size + start
-
-            if self.pos == 0:
-                segment = slice(start, self.size)
-                strings = self.data[segment]
-            else:
-                segment1 = slice(start, self.size)
-                segment2 = slice(0, self.pos)
-                strings = self.data[segment1] + self.data[segment2]
-        else:
+        if start >= 0:
             segment = slice(start, self.pos)
-            strings = self.data[segment]
+            return [x for x in self.data[segment] if x]
 
-        return zlib.crc32(" ".join(strings).encode())
+        start = self.size + start
+
+        if self.pos == 0:
+            segment = slice(start, self.size)
+            return [x for x in self.data[segment] if x]
+
+        segment1 = slice(start, self.size)
+        segment2 = slice(0, self.pos)
+        return [x for x in (self.data[segment1] + self.data[segment2]) if x]
