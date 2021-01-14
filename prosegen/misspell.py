@@ -16,6 +16,11 @@ def replace(value: str) -> str:
 
 
 _MAP = {
+    "i": "I",
+    "i'm": "I'm",
+    "i'd": "I'd",
+    "i'll": "I'll",
+    "serge": "Snerge",
     "abandonned": "abandoned",
     "aberation": "aberration",
     "abilityes": "abilities",

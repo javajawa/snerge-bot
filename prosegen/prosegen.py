@@ -19,7 +19,6 @@ import prosegen.misspell as misspell
 from .buffer import Buffer
 
 
-EMOTE = re.compile(r"(^ | ):([^\s:]+):( |$)")
 DQUOTE1 = re.compile(r' "([^\s]+)" ')
 DQUOTE2 = re.compile(r' "([^"]+)" ')
 SQUOTE1 = re.compile(r" '([^\s]+)' ")
@@ -28,6 +27,8 @@ ELLIPSIS = re.compile(r"\.\.\.+([\s?!]|$)")
 PUNCT = re.compile(r"([?!\.,;:])([\s?!]|$)")
 SPACE = re.compile(r"\s+")
 FILTER_TO_WORD = re.compile(r"[^\w']+")
+
+PUNCT_END = ["?", "!", "."]
 
 
 class ProseGen:
@@ -46,10 +47,9 @@ class ProseGen:
         data = ELLIPSIS.sub(r" … ", data)
         data = PUNCT.sub(r" \1 ", data)
         data = DQUOTE1.sub(r' "!PUNCT \1 " ', data)
-        data = DQUOTE2.sub(r' "!PUNCT \1 " ', data)
         data = SQUOTE1.sub(r' "!PUNCT \1 " ', data)
+        data = DQUOTE2.sub(r' "!PUNCT \1 " ', data)
         data = SQUOTE2.sub(r' "!PUNCT \1 " ', data)
-        data = EMOTE.sub(r" EMOTE\2 ", data)
         data = SPACE.sub(" ", data)
         words = data.strip().split(" ")
 
@@ -74,10 +74,10 @@ class ProseGen:
 
             add_ender = False
 
-            if word in ["?", "…", "!", "."]:
+            if word in PUNCT_END:
                 word = "!PUNCT" + word
                 add_ender = True
-            if word in [",", ";", ":", '"', "'"]:
+            if word in [",", "…", ";", ":", '"', "'"]:
                 word = "!PUNCT" + word
             elif word == "!END" or "!PUNCT" in word:
                 pass
@@ -116,15 +116,15 @@ class ProseGen:
     def make_statement(self, min_len: int = 0) -> str:
         buff: Buffer = Buffer(self.size)
         output: str = ""
-        no_space = False
+        title: bool = True
+        no_space: bool = False
+        quote: bool = False
 
         while True:
-            item = self.get_token(buff)
+            can_end = len(output) > min_len and not quote
+            item = self.get_token(buff, quote, can_end)
 
             if item == "!END":
-                if len(output) < min_len:
-                    continue
-
                 return output.strip()
 
             buff.push(item)
@@ -132,23 +132,37 @@ class ProseGen:
             space = "" if no_space else " "
             no_space = False
 
-            if item.startswith("!PUNCT"):
-                output += item[-1]
-            elif item.endswith("!PUNCT"):
-                output += space + item[0]
-                no_space = True
-            elif item.startswith("EMOTE"):
-                output += space + ":" + item[5:] + ":"
-            else:
-                output += space + item
+            if "!PUNCT" in item:
+                space = space if item.endswith("!PUNCT") else ""
+                no_space = item.endswith("!PUNCT")
+                item = item[0] if item.endswith("!PUNCT") else item[-1]
 
-    def get_token(self, buffer: Buffer) -> str:
+                if item == '"':
+                    quote = not quote
+
+                title = item in PUNCT_END
+
+            elif title:
+                item = item[0].title() + item[1:] if len(item) > 1 else item.upper()
+                title = False
+
+            output += space + item
+
+    def get_token(self, buffer: Buffer, in_quote: bool, can_end: bool) -> str:
         options: counter[str] = Counter()
 
         for size in range(1, buffer.size):
             item = buffer.hash(size)
             if item in self.dataset:
                 options += self.dataset[item]
+
+        if not can_end:
+            del options["!END"]
+
+        if in_quote:
+            del options['"!PUNCT']
+        else:
+            del options['!PUNCT"']
 
         if not options:
             return "!END"
