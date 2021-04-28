@@ -26,7 +26,7 @@ SQUOTE2 = re.compile(r" '(.+)' ")
 ELLIPSIS = re.compile(r"\.\.\.+([\s?!]|$)")
 PUNCT = re.compile(r"([?!\.,;:])([\s?!]|$)")
 SPACE = re.compile(r"\s+")
-FILTER_TO_WORD = re.compile(r"[^\w']+")
+FILTER_TO_WORD = re.compile(r"[^\w'\-]+")
 
 PUNCT_END = ["?", "!", "."]
 

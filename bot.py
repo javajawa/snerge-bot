@@ -26,7 +26,7 @@ BACKOFF_STARTUP = (10, 10)
 # The time until retry wait when no-one has talked recently
 BACKOFF_NO_CHATTERS = (300, 300)
 # How long to wait between sending quotes
-BACKOFF_MESSAGE_SENT = (3000, 4200)
+BACKOFF_MESSAGE_SENT = (1500, 2100)
 
 # How recently someone must have messaged for the channel to be considered active.
 CHAT_ACTIVE_WINDOW = 360
@@ -104,7 +104,7 @@ class Bot(commands.Bot):  # type: ignore
             next_call = random.randint(*BACKOFF_NO_CHATTERS)
 
         else:
-            await self.target.send(self.get_quote())
+            await self.target.send("sergeSnerge " + self.get_quote() + " sergeSnerge")
             next_call = random.randint(*BACKOFF_MESSAGE_SENT)
 
         self._timer = threading.Timer(next_call, lambda: asyncio.run(self.send_quote()))
