@@ -74,6 +74,24 @@ class Bot(commands.Bot):  # type: ignore
                 if "Serge" in attr or "Snerge" in attr:
                     self.prosegen.add_knowledge(quote)
 
+    @staticmethod
+    def owo_magic(non_owo_string: str) -> str:
+        """
+        Converts a non_owo_stirng to an owo_string
+
+        :param non_owo_string: normal string
+
+        :return: owo_string
+        """
+
+        return (
+            non_owo_string.replace("ove", "wuw")
+            .replace("R", "W")
+            .replace("r", "w")
+            .replace("L", "W")
+            .replace("l", "w")
+        )
+
     def get_quote(self) -> str:
         # Max 100 attempts to generate a quote
         for _ in range(0, 100):
@@ -104,7 +122,12 @@ class Bot(commands.Bot):  # type: ignore
             next_call = random.randint(*BACKOFF_NO_CHATTERS)
 
         else:
-            await self.target.send("sergeSnerge " + self.get_quote() + " sergeSnerge")
+            quote = self.get_quote()
+
+            if random.randint(0, 500) == 0:
+                await self.target.send("[UwU] " + self.owo_magic(quote) + " [UwU]")
+            else:
+                await self.target.send("sergeSnerge " + quote + " sergeSnerge")
             next_call = random.randint(*BACKOFF_MESSAGE_SENT)
 
         self._timer = threading.Timer(next_call, lambda: asyncio.run(self.send_quote()))
