@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 import asyncio
+import json
 import random
 import threading
 import time
@@ -107,6 +108,12 @@ class Bot(commands.Bot):  # type: ignore
 
         self.target = self.get_channel("sergeyager")
 
+        with open("rewards.token") as rewards_token:
+            await self.pubsub_subscribe(
+                rewards_token.read().strip(),
+                "channel-points-channel-v1.73022083"
+            )
+
     async def event_message(self, message: Message) -> None:
         if message.author.name.lower() == self.nick.lower():
             return
@@ -135,6 +142,26 @@ class Bot(commands.Bot):  # type: ignore
 
     async def event_pubsub(self, data: Any) -> None:
         raise NotImplementedError
+
+    async def event_raw_pubsub(self, data: Any) -> None:
+        if "type" not in data:
+            return
+
+        if data["type"] != "MESSAGE":
+            return
+
+        if "topic" not in data["data"]:
+            return
+
+        if data["data"]["topic"] != "channel-points-channel-v1.73022083":
+            return
+
+        _json = json.loads(data["data"]["message"])
+
+        print(_json)
+
+        if _json["data"]["reward"]["title"] == "Summon Snerge":
+            await self.send_quote()
 
 
 if __name__ == "__main__":
