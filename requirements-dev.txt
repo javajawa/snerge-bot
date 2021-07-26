@@ -11,5 +11,7 @@ mypy
 pylint
 reuse
 
+types-requests
+
 twine
 wheel

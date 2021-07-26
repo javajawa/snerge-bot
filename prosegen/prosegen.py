@@ -14,7 +14,7 @@ import itertools
 import random
 import re
 
-import prosegen.misspell as misspell
+from prosegen import misspell
 
 from .buffer import Buffer
 

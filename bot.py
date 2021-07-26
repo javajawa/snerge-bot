@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 import asyncio
 import json
@@ -40,7 +40,7 @@ MESSAGE_LEN_MAX = 80
 
 class Bot(commands.Bot):  # type: ignore
     prosegen: prosegen.ProseGen
-    target: Optional[Channel]
+    target: Channel
     last_message: int
 
     def __init__(self) -> None:
@@ -110,8 +110,7 @@ class Bot(commands.Bot):  # type: ignore
 
         with open("rewards.token") as rewards_token:
             await self.pubsub_subscribe(
-                rewards_token.read().strip(),
-                "channel-points-channel-v1.73022083"
+                rewards_token.read().strip(), "channel-points-channel-v1.73022083"
             )
 
     async def event_message(self, message: Message) -> None:
@@ -129,39 +128,47 @@ class Bot(commands.Bot):  # type: ignore
             next_call = random.randint(*BACKOFF_NO_CHATTERS)
 
         else:
-            quote = self.get_quote()
-
-            if random.randint(0, 500) == 0:
-                await self.target.send("[UwU] " + self.owo_magic(quote) + " [UwU]")
-            else:
-                await self.target.send("sergeSnerge " + quote + " sergeSnerge")
+            await self.send_quote_actual()
             next_call = random.randint(*BACKOFF_MESSAGE_SENT)
 
         self._timer = threading.Timer(next_call, lambda: asyncio.run(self.send_quote()))
         self._timer.start()
+
+    async def send_quote_actual(self) -> None:
+        quote = self.get_quote()
+
+        if random.randint(0, 500) == 0:
+            await self.target.send("[UwU] " + self.owo_magic(quote) + " [UwU]")
+        else:
+            await self.target.send("sergeSnerge " + quote + " sergeSnerge")
 
     async def event_pubsub(self, data: Any) -> None:
         raise NotImplementedError
 
     async def event_raw_pubsub(self, data: Any) -> None:
         if "type" not in data:
+            print("No type in pub-sub event")
             return
 
         if data["type"] != "MESSAGE":
             return
 
         if "topic" not in data["data"]:
+            print("No topic in pub-sub message")
             return
 
         if data["data"]["topic"] != "channel-points-channel-v1.73022083":
+            print("Unexpected pub-sub topic {data['data']['topic']}")
             return
 
         _json = json.loads(data["data"]["message"])
 
-        print(_json)
-
-        if _json["data"]["reward"]["title"] == "Summon Snerge":
-            await self.send_quote()
+        if _json["data"]["redemption"]["reward"]["title"] == "Summon Snerge":
+            await self.send_quote_actual()
+        else:
+            print(
+                "Ignoring non-Snerge reward " + _json["data"]["redemption"]["reward"]["title"]
+            )
 
 
 if __name__ == "__main__":
