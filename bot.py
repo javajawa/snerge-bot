@@ -38,6 +38,27 @@ MESSAGE_LEN_MIN = 24
 MESSAGE_LEN_MAX = 80
 
 
+def load_data() -> prosegen.ProseGen:
+    data = requests.get(
+        "https://raw.githubusercontent.com/RebelliousUno/BrewCrewQuoteDB/main/quotes.txt"
+    )
+    instance = prosegen.ProseGen(20)
+
+    for line in data.text.split("\n"):
+        line = line.strip()
+
+        if not line:
+            continue
+
+        line_quotes = line.split('"')[1:]
+
+        for quote, attr in zip(*[iter(line_quotes)] * 2):
+            if "Serge" in attr or "Snerge" in attr:
+                instance.add_knowledge(quote)
+
+    return instance
+
+
 class Bot(commands.Bot):  # type: ignore
     prosegen: prosegen.ProseGen
     target: Channel
@@ -58,22 +79,7 @@ class Bot(commands.Bot):  # type: ignore
         asyncio.run(self.send_quote())
 
     def load_data(self) -> None:
-        data = requests.get(
-            "https://raw.githubusercontent.com/RebelliousUno/BrewCrewQuoteDB/main/quotes.txt"
-        )
-        self.prosegen = prosegen.ProseGen(20)
-
-        for line in data.text.split("\n"):
-            line = line.strip()
-
-            if not line:
-                continue
-
-            line_quotes = line.split('"')[1:]
-
-            for quote, attr in zip(*[iter(line_quotes)] * 2):
-                if "Serge" in attr or "Snerge" in attr:
-                    self.prosegen.add_knowledge(quote)
+        self.prosegen = load_data()
 
     @staticmethod
     def owo_magic(non_owo_string: str) -> str:

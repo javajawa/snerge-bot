@@ -4,8 +4,10 @@
 #
 # SPDX-License-Identifier: BSD-2-Clause
 
+PATHS="bot.py snergism.py prosegen"
+
 reuse lint
-black bot.py prosegen
-flake8 bot.py prosegen
-mypy --strict bot.py prosegen
-pylint bot.py prosegen
+black $PATHS
+flake8 $PATHS
+mypy --strict $PATHS
+pylint $PATHS
