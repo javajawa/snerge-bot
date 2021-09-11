@@ -10,15 +10,20 @@ from __future__ import annotations
 from typing import Any
 
 import asyncio
+import logging
 import json
 import random
 import threading
 import time
 
+from systemd.journal import JournalHandler
 from twitchio.ext import commands  # type: ignore
 from twitchio.dataclasses import Channel, Message  # type: ignore
 
 from load import load_data, ProseGen
+
+
+LOGGER = logging.getLogger("snerge")
 
 
 # The time until retry after when we lack a functional connection to Twitch
@@ -88,7 +93,7 @@ class Bot(commands.Bot):  # type: ignore
         return "I don't like coffee."
 
     async def event_ready(self) -> None:
-        print(f"Connected | {self.nick}")
+        LOGGER.info(f"Connected | {self.nick}")
 
         self.target = self.get_channel("sergeyager")
 
@@ -105,7 +110,7 @@ class Bot(commands.Bot):  # type: ignore
 
     async def send_quote(self) -> None:
         if not self.target:
-            print("No target initialised")
+            LOGGER.info("No target initialised")
             next_call = random.randint(*BACKOFF_STARTUP)
 
         elif time.time() - self.last_message > CHAT_ACTIVE_WINDOW:
@@ -121,7 +126,9 @@ class Bot(commands.Bot):  # type: ignore
     async def send_quote_actual(self) -> None:
         quote = self.get_quote()
 
-        if random.randint(0, 500) == 0:
+        LOGGER.info("Sending quote %s", quote)
+
+        if random.randint(0, 2000) == 0:
             await self.target.send("[UwU] " + self.owo_magic(quote) + " [UwU]")
         else:
             await self.target.send("sergeSnerge " + quote + " sergeSnerge")
@@ -131,18 +138,18 @@ class Bot(commands.Bot):  # type: ignore
 
     async def event_raw_pubsub(self, data: Any) -> None:
         if "type" not in data:
-            print("No type in pub-sub event")
+            LOGGER.info("No type in pub-sub event")
             return
 
         if data["type"] != "MESSAGE":
             return
 
         if "topic" not in data["data"]:
-            print("No topic in pub-sub message")
+            LOGGER.info("No topic in pub-sub message")
             return
 
         if data["data"]["topic"] != "channel-points-channel-v1.73022083":
-            print("Unexpected pub-sub topic {data['data']['topic']}")
+            LOGGER.info("Unexpected pub-sub topic %s", data["data"]["topic"])
             return
 
         _json = json.loads(data["data"]["message"])
@@ -150,10 +157,13 @@ class Bot(commands.Bot):  # type: ignore
         if _json["data"]["redemption"]["reward"]["title"] == "Summon Snerge":
             await self.send_quote_actual()
         else:
-            print(
-                "Ignoring non-Snerge reward " + _json["data"]["redemption"]["reward"]["title"]
+            LOGGER.info(
+                "Ignoring non-Snerge reward %s",
+                _json["data"]["redemption"]["reward"]["title"],
             )
 
 
 if __name__ == "__main__":
+    LOGGER.addHandler(JournalHandler())
+    LOGGER.setLevel(logging.INFO)
     Bot().run()
