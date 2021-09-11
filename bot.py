@@ -16,7 +16,7 @@ import random
 import threading
 import time
 
-from systemd.journal import JournalHandler
+from systemd.journal import JournalHandler  # type: ignore
 from twitchio.ext import commands  # type: ignore
 from twitchio.dataclasses import Channel, Message  # type: ignore
 
@@ -93,7 +93,7 @@ class Bot(commands.Bot):  # type: ignore
         return "I don't like coffee."
 
     async def event_ready(self) -> None:
-        LOGGER.info(f"Connected | {self.nick}")
+        LOGGER.info("Connected as %s", self.nick)
 
         self.target = self.get_channel("sergeyager")
 
