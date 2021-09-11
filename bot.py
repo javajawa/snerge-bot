@@ -15,11 +15,10 @@ import random
 import threading
 import time
 
-import requests
 from twitchio.ext import commands  # type: ignore
 from twitchio.dataclasses import Channel, Message  # type: ignore
 
-import prosegen
+from load import load_data, ProseGen
 
 
 # The time until retry after when we lack a functional connection to Twitch
@@ -38,29 +37,8 @@ MESSAGE_LEN_MIN = 24
 MESSAGE_LEN_MAX = 80
 
 
-def load_data() -> prosegen.ProseGen:
-    data = requests.get(
-        "https://raw.githubusercontent.com/RebelliousUno/BrewCrewQuoteDB/main/quotes.txt"
-    )
-    instance = prosegen.ProseGen(20)
-
-    for line in data.text.split("\n"):
-        line = line.strip()
-
-        if not line:
-            continue
-
-        line_quotes = line.split('"')[1:]
-
-        for quote, attr in zip(*[iter(line_quotes)] * 2):
-            if "Serge" in attr or "Snerge" in attr:
-                instance.add_knowledge(quote)
-
-    return instance
-
-
 class Bot(commands.Bot):  # type: ignore
-    prosegen: prosegen.ProseGen
+    prosegen: ProseGen
     target: Channel
     last_message: int
 
