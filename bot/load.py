@@ -9,29 +9,37 @@ from __future__ import annotations
 
 from typing import Generator, List, Tuple
 
+import logging
 import requests
 
 from bs4 import BeautifulSoup, NavigableString  # type: ignore
 
-import prosegen
+from prosegen import ProseGen
 
 
-ProseGen = prosegen.ProseGen
+LOGGER = logging.getLogger("snerge")
 
 
 def load_data() -> ProseGen:
-    instance = prosegen.ProseGen(20)
+    instance = ProseGen(20)
 
+    quotes = 0
     for quote in load_uno_quotes():
+        quotes += 1
         instance.add_knowledge(quote)
+    LOGGER.info("Added %d Uno quotes", quotes)
 
+    quotes = 0
     for _, quote in load_lrr_quotes():
+        quotes += 1
         instance.add_knowledge(quote)
+    LOGGER.info("Added %d LRR quotes", quotes)
 
     return instance
 
 
 def load_uno_quotes() -> Generator[str, None, None]:
+    LOGGER.info("Loading quotes from Uno-db")
     data = requests.get(
         "https://raw.githubusercontent.com/RebelliousUno/BrewCrewQuoteDB/main/quotes.txt"
     )
@@ -58,13 +66,16 @@ def load_lrr_quotes() -> Generator[Tuple[str, str], None, None]:
             _id, _ = line.split(" ", 1)
             exclude.append(_id)
 
-    for page in range(1, 14):
+    LOGGER.info("Added %d quotes to the LRR exclude list", len(exclude))
+
+    for page in range(1, 15):
         yield from load_lrr_quote_page(page, exclude)
 
 
 def load_lrr_quote_page(
     page: int, exclude: List[str]
 ) -> Generator[Tuple[str, str], None, None]:
+    LOGGER.info("Loading LRR quote page %d", page)
     html = requests.get(f"https://lrrbot.com/quotes/search?q=serge&mode=name&page={page}")
     soup = BeautifulSoup(html.content, "html.parser")
 

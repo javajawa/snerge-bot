@@ -9,7 +9,7 @@
 
 from __future__ import annotations
 
-from load import load_data
+from bot.load import load_data
 
 
 def main() -> None:

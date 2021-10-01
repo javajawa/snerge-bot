@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: BSD-2-Clause
 
-PATHS="bot.py load.py snergism.py prosegen"
+PATHS="bot prosegen"
 
 reuse lint
 black $PATHS

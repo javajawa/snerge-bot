@@ -20,11 +20,14 @@ from systemd.journal import JournalHandler  # type: ignore
 from twitchio.ext import commands  # type: ignore
 from twitchio.dataclasses import Channel, Message  # type: ignore
 
-from load import load_data, ProseGen
+from bot.load import load_data
+from bot.token import Token
+from prosegen import ProseGen
 
 
 LOGGER = logging.getLogger("snerge")
 
+CHANNEL = "sergeyager"
 
 # The time until retry after when we lack a functional connection to Twitch
 BACKOFF_STARTUP = (10, 10)
@@ -53,7 +56,7 @@ class Bot(commands.Bot):  # type: ignore
                 nick="SnergeBot",
                 prefix="!",
                 irc_token=token.read().strip(),
-                initial_channels=["sergeyager"],
+                initial_channels=[CHANNEL],
             )
 
         self.load_data()
@@ -95,12 +98,13 @@ class Bot(commands.Bot):  # type: ignore
     async def event_ready(self) -> None:
         LOGGER.info("Connected as %s", self.nick)
 
-        self.target = self.get_channel("sergeyager")
+        self.target = self.get_channel(CHANNEL)
 
-        with open("rewards.token") as rewards_token:
-            await self.pubsub_subscribe(
-                rewards_token.read().strip(), "channel-points-channel-v1.73022083"
-            )
+        token = Token.load(CHANNEL)
+        LOGGER.info("Renewing oAuth token")
+        token.renew()
+
+        await self.pubsub_subscribe(token.access_token, "channel-points-channel-v1.73022083")
 
     async def event_message(self, message: Message) -> None:
         if message.author.name.lower() == self.nick.lower():
@@ -139,6 +143,14 @@ class Bot(commands.Bot):  # type: ignore
     async def event_raw_pubsub(self, data: Any) -> None:
         if "type" not in data:
             LOGGER.info("No type in pub-sub event")
+            return
+
+        if data["type"] == "RESPONSE":
+            if data["error"]:
+                LOGGER.error("PubSub issue: %s", json.dumps(data))
+            else:
+                LOGGER.info("PubSub initialised")
+
             return
 
         if data["type"] != "MESSAGE":
