@@ -77,9 +77,11 @@ class Response:
 
 
 class Handler:
+    app: token.App
     states: List[str]
 
     def __init__(self) -> None:
+        self.app = token.App.load()
         self.states = []
 
     def __call__(self, environ: WSGIEnv, start: WSGICallback) -> Iterable[bytes]:
@@ -105,8 +107,8 @@ class Handler:
         destination = (
             "https://id.twitch.tv/oauth2/authorize"
             "?response_type=code"
-            f"&client_id={token.CLIENT_ID}"
-            f"&redirect_uri={token.REDIRECT_URL}"
+            f"&client_id={self.app.client_id}"
+            f"&redirect_uri={self.app.redirect_url}"
             "&scope=channel:read:redemptions"
             f"&state={state}"
         )
@@ -131,11 +133,11 @@ class Handler:
         token_request = requests.post(
             "https://id.twitch.tv/oauth2/token",
             {
-                "client_id": token.CLIENT_ID,
-                "client_secret": token.CLIENT_SECRET,
+                "client_id": self.app.client_id,
+                "client_secret": self.app.client_secret,
                 "code": data["code"],
                 "grant_type": "authorization_code",
-                "redirect_uri": token.REDIRECT_URL,
+                "redirect_uri": self.app.redirect_url,
             },
         )
 
@@ -150,7 +152,7 @@ class Handler:
             "https://api.twitch.tv/helix/users",
             headers={
                 "Authorization": "Bearer " + token_json["access_token"],
-                "Client-ID": token.CLIENT_ID,
+                "Client-ID": self.app.client_id,
             },
         )
 
@@ -164,6 +166,7 @@ class Handler:
         user = user["data"][0]
 
         new_token = token.Token(
+            int(user["id"]),
             user["login"],
             token_json["access_token"],
             token_json["refresh_token"],

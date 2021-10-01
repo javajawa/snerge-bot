@@ -21,7 +21,7 @@ from twitchio.ext import commands  # type: ignore
 from twitchio.dataclasses import Channel, Message  # type: ignore
 
 from bot.load import load_data
-from bot.token import Token
+from bot.token import App, Token
 from prosegen import ProseGen
 
 
@@ -46,26 +46,31 @@ MESSAGE_LEN_MAX = 80
 
 
 class Bot(commands.Bot):  # type: ignore
+    app: App
     prosegen: ProseGen
     target: Channel
     last_message: int
 
     def __init__(self) -> None:
-        with open("twitch.token") as token:
-            super().__init__(
-                nick="SnergeBot",
-                prefix="!",
-                irc_token=token.read().strip(),
-                initial_channels=[CHANNEL],
-            )
+        self.app = App.load()
 
-        self.load_data()
+        super().__init__(
+            nick="SnergeBot",
+            prefix="!",
+            irc_token=self.app.irc_token,
+            initial_channels=[CHANNEL],
+        )
+
         self.target = None
         self.last_message = 0
-        asyncio.run(self.send_quote())
+        self.token = Token.load(CHANNEL)
 
-    def load_data(self) -> None:
+        LOGGER.info("Renewing oAuth token")
+        self.token.renew(self.app)
+
         self.prosegen = load_data()
+
+        asyncio.run(self.send_quote())
 
     @staticmethod
     def owo_magic(non_owo_string: str) -> str:
@@ -100,11 +105,9 @@ class Bot(commands.Bot):  # type: ignore
 
         self.target = self.get_channel(CHANNEL)
 
-        token = Token.load(CHANNEL)
-        LOGGER.info("Renewing oAuth token")
-        token.renew()
-
-        await self.pubsub_subscribe(token.access_token, "channel-points-channel-v1.73022083")
+        await self.pubsub_subscribe(
+            self.token.access_token, f"channel-points-channel-v1.{self.token.user_id}"
+        )
 
     async def event_message(self, message: Message) -> None:
         if message.author.name.lower() == self.nick.lower():
@@ -146,10 +149,14 @@ class Bot(commands.Bot):  # type: ignore
             return
 
         if data["type"] == "RESPONSE":
-            if data["error"]:
-                LOGGER.error("PubSub issue: %s", json.dumps(data))
-            else:
+            if not data["error"]:
                 LOGGER.info("PubSub initialised")
+            elif data["error"] == "ERR_BADAUTH":
+                LOGGER.warning("PubSub issue: %s", json.dumps(data))
+                LOGGER.info("Renewing oAuth token")
+                self.token.renew(self.app)
+            else:
+                LOGGER.error("PubSub issue: %s", json.dumps(data))
 
             return
 

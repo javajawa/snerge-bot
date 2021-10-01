@@ -13,13 +13,31 @@ import pickle
 import requests
 
 
-CLIENT_ID = "hm7gmtnxatfdzfy1wmapsa53cd11e0"
-CLIENT_SECRET = "mx0quj2awpncofjaampzf3bxg0paze"
-REDIRECT_URL = "https://snerge.tea-cats.co.uk/"
+@dataclasses.dataclass
+class App:
+    client_id: str
+    client_secret: str
+    irc_token: str
+    redirect_url: str
+
+    def store(self) -> None:
+        with open("tokens/_app.token", "wb") as handle:
+            pickle.dump(self, handle)
+
+    @classmethod
+    def load(cls) -> App:
+        with open("tokens/_app.token", "rb") as handle:
+            data = pickle.load(handle)
+
+            if not isinstance(data, App):
+                raise TypeError("Found incorrect token type: " + type(data))
+
+            return data
 
 
 @dataclasses.dataclass
 class Token:
+    user_id: int
     user: str
     access_token: str
     refresh_token: str
@@ -28,12 +46,12 @@ class Token:
         with open(f"tokens/{self.user}.token", "wb") as handle:
             pickle.dump(self, handle)
 
-    def renew(self) -> bool:
+    def renew(self, app: App) -> bool:
         token_request = requests.post(
             "https://id.twitch.tv/oauth2/token",
             {
-                "client_id": CLIENT_ID,
-                "client_secret": CLIENT_SECRET,
+                "client_id": app.client_id,
+                "client_secret": app.client_secret,
                 "grant_type": "refresh_token",
                 "refresh_token": self.refresh_token,
             },
