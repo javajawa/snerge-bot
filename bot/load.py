@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Generator, List, Tuple
 
+import json
 import logging
 import requests
 
@@ -24,27 +25,29 @@ def load_data() -> ProseGen:
     instance = ProseGen(20)
 
     quotes = 0
-    for quote in load_uno_quotes():
+    for qid, quote in load_uno_quotes():
         quotes += 1
-        instance.add_knowledge(quote)
+        instance.add_knowledge(quote, source=f"uno line {qid}")
     LOGGER.info("Added %d Uno quotes", quotes)
 
     quotes = 0
-    for _, quote in load_lrr_quotes():
+    for qid, quote in load_lrr_quotes():
         quotes += 1
-        instance.add_knowledge(quote)
+        instance.add_knowledge(quote, source=f"lrr {qid}")
     LOGGER.info("Added %d LRR quotes", quotes)
 
     return instance
 
 
-def load_uno_quotes() -> Generator[str, None, None]:
+def load_uno_quotes() -> Generator[Tuple[str, str], None, None]:
     LOGGER.info("Loading quotes from Uno-db")
     data = requests.get(
         "https://raw.githubusercontent.com/RebelliousUno/BrewCrewQuoteDB/main/quotes.txt"
     )
 
+    qid = 0
     for line in data.text.split("\n"):
+        qid += 1
         line = line.strip()
 
         if not line:
@@ -54,7 +57,7 @@ def load_uno_quotes() -> Generator[str, None, None]:
 
         for quote, attr in zip(*[iter(line_quotes)] * 2):
             if "Serge" in attr or "Snerge" in attr:
-                yield quote
+                yield qid, quote
 
 
 def load_lrr_quotes() -> Generator[Tuple[str, str], None, None]:
@@ -102,10 +105,21 @@ def load_lrr_quote_page(
             yield quote_id, quote_text
 
 
+class SetEncoder(json.JSONEncoder):
+    def default(self, obj):
+       if isinstance(obj, set):
+          return list(obj)
+       return json.JSONEncoder.default(self, obj)
+
+
 def main() -> None:
     with open("loaded_lrr_quotes.txt", "wt") as handle:
         for quote_id, quote in load_lrr_quotes():
             handle.write(f"{quote_id}, {quote}\n")
+
+    dataset = load_data()
+    with open("parsed_state.json", "wt") as handle:
+        json.dump(dataset.dictionary, handle, cls=SetEncoder)
 
 
 if __name__ == "__main__":
