@@ -10,15 +10,23 @@ from __future__ import annotations
 from typing import Any, Callable, Dict, Iterable, List, Sequence, Tuple, Union
 
 import dataclasses
+import hashlib
+import hmac
+import json
+import logging
 import random
+import sys
 
 from urllib.parse import parse_qs
 
 import requests
 import gunicorn.app.base  # type: ignore
+from systemd.journal import JournalHandler  # type: ignore
 
 from bot import token
 
+
+LOGGER = logging.getLogger("snerge")
 
 WSGIEnv = Dict[str, str]
 WSGICallback = Callable[[str, Sequence[Tuple[str, str]]], None]
@@ -114,6 +122,7 @@ class Handler:
         )
 
         self.states.append(state)
+        LOGGER.info("Redirect created, nonce: %s", state)
 
         return Response(
             307,
@@ -128,6 +137,7 @@ class Handler:
         if len(state) != 1 or state[0] not in self.states:
             return Response(400, "text/plain", b"Missing or incorrect state info")
 
+        LOGGER.info("Getting auth token, nonce: %s", state[0])
         self.states.remove(state[0])
 
         token_request = requests.post(
@@ -144,6 +154,7 @@ class Handler:
         token_json = token_request.json()
 
         if "access_token" not in token_json:
+            LOGGER.warning("Unable to get token: %s", str(token_json))
             return Response(
                 500, "text/plain", b"Auth Error: " + str(token_json).encode("utf-8")
             )
@@ -156,14 +167,15 @@ class Handler:
             },
         )
 
-        user = user_request.json()
+        user_json = user_request.json()
 
-        if "data" not in user or len(user["data"]) != 1:
+        if "data" not in user_json or len(user_json["data"]) != 1:
+            LOGGER.warning("Unable to get user: %s", str(user_json))
             return Response(
-                500, "text/plain", b"User Fetch Error: " + str(user).encode("utf-8")
+                500, "text/plain", b"User Fetch Error: " + str(user_json).encode("utf-8")
             )
 
-        user = user["data"][0]
+        user = user_json["data"][0]
 
         new_token = token.Token(
             int(user["id"]),
@@ -173,12 +185,21 @@ class Handler:
         )
         new_token.store()
 
+        LOGGER.info("Successfully registered user %s", user["login"])
+
         message = f"Thank you {new_token.user}! Your credentials have been stored!"
 
         return Response(200, "text/plain", message.encode("utf-8"))
 
 
 if __name__ == "__main__":
+    if sys.stdout.isatty():
+        LOGGER.addHandler(logging.StreamHandler())
+        LOGGER.setLevel(logging.DEBUG)
+    else:
+        LOGGER.addHandler(JournalHandler(SYSLOG_IDENTIFIER="snerge-bot"))
+        LOGGER.setLevel(logging.DEBUG)
+
     _options = {
         "bind": "%s:%s" % ("127.0.1.2", "8888"),
         "workers": 1,

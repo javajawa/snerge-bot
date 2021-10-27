@@ -104,6 +104,8 @@ class Bot(commands.Bot):  # type: ignore
         LOGGER.info("Connected as %s", self.nick)
 
         self.target = self.get_channel(CHANNEL)
+        if self.target:
+            LOGGER.info("Connected to channel %s", CHANNEL)
 
         await self.pubsub_subscribe(
             self.token.access_token, f"channel-points-channel-v1.{self.token.user_id}"
@@ -183,6 +185,6 @@ class Bot(commands.Bot):  # type: ignore
 
 
 if __name__ == "__main__":
-    LOGGER.addHandler(JournalHandler())
+    LOGGER.addHandler(JournalHandler(SYSLOG_IDENTIFIER="snerge-bot"))
     LOGGER.setLevel(logging.INFO)
     Bot().run()
