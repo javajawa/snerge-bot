@@ -18,6 +18,7 @@ class App:
     client_id: str
     client_secret: str
     irc_token: str
+    app_token: str
     redirect_url: str
 
     def store(self) -> None:

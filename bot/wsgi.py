@@ -93,7 +93,11 @@ class Handler:
         self.states = []
 
     def __call__(self, environ: WSGIEnv, start: WSGICallback) -> Iterable[bytes]:
-        if environ.get("PATH_INFO", "/") != "/":
+        path = environ.get("PATH_INFO", "/")
+
+        if path == "/webhook" or path == "webhook":
+            response = self.handle_webhook(environ)
+        elif path != "/":
             response = self.render404()
         elif not environ.get("QUERY_STRING", None):
             response = self.get_redirect()
@@ -130,6 +134,36 @@ class Handler:
             b"Redirecting to " + destination.encode("utf-8"),
             [("location", destination)],
         )
+
+    def handle_webhook(self, environ: WSGIEnv) -> Response:
+        content_json = environ["wsgi.input"].read(int(environ.get("CONTENT_LENGTH", 0)))
+
+        if not verify_signature(environ, content_json):
+            return Response(
+                400,
+                "text/plain",
+                b"Incorrect Signature"
+            )
+
+        content = json.loads(content_json)
+        subtype = environ.get("HTTP_TWITCH_EVENTSUB_SUBSCRIPTION_TYPE")
+        event = environ.get("HTTP_TWITCH_EVENTSUB_MESSAGE_TYPE")
+
+        LOGGER.info("%s webhook event %s", subtype, event)
+
+        if event == "webhook_callback_verification":
+            return Response(
+                200,
+                "text/plain",
+                content["challenge"].encode("utf-8"),
+            )
+
+        #if event == "notification":
+
+        LOGGER.info(json.dumps(content, indent="  "))
+
+        return Response(204, "text/plain", b"")
+
 
     def handle_code(self, data: Dict[str, List[str]]) -> Response:
         state = data.get("state", [])
@@ -192,6 +226,77 @@ class Handler:
         return Response(200, "text/plain", message.encode("utf-8"))
 
 
+def get_app_token() -> None:
+    app = token.App.load()
+
+    response = requests.post(
+        "https://id.twitch.tv/oauth2/token",
+        {
+            "client_id": app.client_id,
+            "client_secret": app.client_secret,
+            "grant_type": "client_credentials",
+            "scope": "channel:read:redemptions",
+        }
+    )
+
+    app.app_token = response.json()["access_token"]
+    app.store()
+
+
+SECRET = b"hello_my_world"
+
+
+def register(username: str) -> None:
+    app = token.App.load()
+    user = token.Token.load(username)
+
+    data = {
+        "type": "channel.channel_points_custom_reward_redemption.add",
+        "version": "1",
+        "condition": {
+            "broadcaster_user_id": str(user.user_id),
+        },
+        "transport": {
+            "method": "webhook",
+            "callback": "https://snerge.tea-cats.co.uk/webhook",
+            "secret": SECRET.decode("utf-8"),
+        },
+    }
+
+    response = requests.post(
+        "https://api.twitch.tv/helix/eventsub/subscriptions",
+        json=data,
+        headers={
+            "Content-type": "application/json",
+            "Client-ID": app.client_id,
+            "Authorization": "Bearer " + app.app_token,
+        },
+    )
+
+    print(response, response.json())
+
+
+def verify_signature(environ: WSGIEnv, body: bytes) -> bool:
+    signature = environ.get("HTTP_TWITCH_EVENTSUB_MESSAGE_SIGNATURE")
+
+    if not signature:
+        return False
+
+    mode, signature = signature.split("=", 1)
+
+    if mode != "sha256":
+        LOGGER.info("Sitnature not using the SHA-256 HMAC")
+        return False
+
+    mid = environ.get("HTTP_TWITCH_EVENTSUB_MESSAGE_ID", "")
+    tstamp = environ.get("HTTP_TWITCH_EVENTSUB_MESSAGE_TIMESTAMP", "")
+    payload = mid.encode("utf-8") + tstamp.encode("utf-8") + body
+
+    sig = hmac.new(SECRET, msg=payload, digestmod=hashlib.sha256).hexdigest()
+
+    return sig == signature
+
+
 if __name__ == "__main__":
     if sys.stdout.isatty():
         LOGGER.addHandler(logging.StreamHandler())
@@ -204,5 +309,8 @@ if __name__ == "__main__":
         "bind": "%s:%s" % ("127.0.1.2", "8888"),
         "workers": 1,
     }
+
+    get_app_token()
+    register("sergeyager")
 
     StandAlone(_options).run()
