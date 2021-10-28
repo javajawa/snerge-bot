@@ -19,11 +19,13 @@ from prosegen import misspell
 from .buffer import Buffer
 
 
-DQUOTE1 = re.compile(r' "([^\s]+)" ')
-DQUOTE2 = re.compile(r' "([^"]+)" ')
-SQUOTE1 = re.compile(r" '([^\s]+)' ")
-SQUOTE2 = re.compile(r" '(.+)' ")
-ELLIPSIS = re.compile(r"\.\.\.+([\s?!]|$)")
+DQUOTE1 = re.compile(r'(?:^| )"([^\s]+)"(?: |$)')
+DQUOTE2 = re.compile(r'(?:^| )"([^"]+)"(?: |$)')
+SQUOTE1 = re.compile(r"(?:^| )'([^\s]+)'(?: |$)")
+SQUOTE2 = re.compile(r"(?:^| )'(.+)'(?: |$)")
+NDASH = re.compile(r"(\w)--( |$)")
+ELLIPSIS_P = re.compile(r"\.\.\.+([?!])")
+ELLIPSIS = re.compile(r"\.\.\.+")
 PUNCT = re.compile(r"([?!\.,;:])([\s?!]|$)")
 SPACE = re.compile(r"\s+")
 FILTER_TO_WORD = re.compile(r"[^\w'\-]+")
@@ -46,8 +48,10 @@ class ProseGen:
     def add_knowledge(self, data: str, source: str = "", debug: bool = False) -> None:
         data = data.lower().strip()
 
+        data = ELLIPSIS_P.sub(r" … \1 ", data)
         data = ELLIPSIS.sub(r" … ", data)
         data = PUNCT.sub(r" \1 ", data)
+        data = NDASH.sub(r"\1 –", data)
         data = DQUOTE1.sub(r' "!PUNCT \1 " ', data)
         data = SQUOTE1.sub(r' "!PUNCT \1 " ', data)
         data = DQUOTE2.sub(r' "!PUNCT \1 " ', data)
@@ -79,7 +83,7 @@ class ProseGen:
             if word in PUNCT_END:
                 word = "!PUNCT" + word
                 add_ender = True
-            if word in [",", "…", ";", ":", '"', "'"]:
+            if word in [",", "…", ";", ":", '"', "'", "–"]:
                 word = "!PUNCT" + word
             elif word == "!END" or "!PUNCT" in word:
                 pass
