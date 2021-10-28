@@ -303,7 +303,7 @@ if __name__ == "__main__":
         LOGGER.setLevel(logging.DEBUG)
     else:
         LOGGER.addHandler(JournalHandler(SYSLOG_IDENTIFIER="snerge-bot"))
-        LOGGER.setLevel(logging.DEBUG)
+        LOGGER.setLevel(logging.WARNING)
 
     _options = {
         "bind": "%s:%s" % ("127.0.1.2", "8888"),
