@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from typing import Generator, List, Tuple
+from typing import Any, Generator, List, Tuple
 
 import json
 import logging
@@ -57,7 +57,7 @@ def load_uno_quotes() -> Generator[Tuple[str, str], None, None]:
 
         for quote, attr in zip(*[iter(line_quotes)] * 2):
             if "Serge" in attr or "Snerge" in attr:
-                yield qid, quote
+                yield str(qid), str(quote)
 
 
 def load_lrr_quotes() -> Generator[Tuple[str, str], None, None]:
@@ -106,10 +106,10 @@ def load_lrr_quote_page(
 
 
 class SetEncoder(json.JSONEncoder):
-    def default(self, obj):
-       if isinstance(obj, set):
-          return list(obj)
-       return json.JSONEncoder.default(self, obj)
+    def default(self, o: Any) -> Any:
+        if isinstance(o, set):
+            return list(o)
+        return json.JSONEncoder.default(self, o)
 
 
 def main() -> None:

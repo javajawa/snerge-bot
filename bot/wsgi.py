@@ -95,7 +95,7 @@ class Handler:
     def __call__(self, environ: WSGIEnv, start: WSGICallback) -> Iterable[bytes]:
         path = environ.get("PATH_INFO", "/")
 
-        if path == "/webhook" or path == "webhook":
+        if path in ["/webhook", "webhook"]:
             response = self.handle_webhook(environ)
         elif path != "/":
             response = self.render404()
@@ -135,15 +135,14 @@ class Handler:
             [("location", destination)],
         )
 
-    def handle_webhook(self, environ: WSGIEnv) -> Response:
-        content_json = environ["wsgi.input"].read(int(environ.get("CONTENT_LENGTH", 0)))
+    @staticmethod
+    def handle_webhook(environ: WSGIEnv) -> Response:
+        content_json = environ["wsgi.input"].read(  # type: ignore
+            int(environ.get("CONTENT_LENGTH", 0))
+        )
 
         if not verify_signature(environ, content_json):
-            return Response(
-                400,
-                "text/plain",
-                b"Incorrect Signature"
-            )
+            return Response(400, "text/plain", b"Incorrect Signature")
 
         content = json.loads(content_json)
         subtype = environ.get("HTTP_TWITCH_EVENTSUB_SUBSCRIPTION_TYPE")
@@ -158,12 +157,11 @@ class Handler:
                 content["challenge"].encode("utf-8"),
             )
 
-        #if event == "notification":
+        # if event == "notification":
 
         LOGGER.info(json.dumps(content, indent="  "))
 
         return Response(204, "text/plain", b"")
-
 
     def handle_code(self, data: Dict[str, List[str]]) -> Response:
         state = data.get("state", [])
@@ -236,7 +234,7 @@ def get_app_token() -> None:
             "client_secret": app.client_secret,
             "grant_type": "client_credentials",
             "scope": "channel:read:redemptions",
-        }
+        },
     )
 
     app.app_token = response.json()["access_token"]

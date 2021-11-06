@@ -14,8 +14,9 @@ import bot.token
 
 if __name__ == "__main__":
     bot.token.App(
-        os.environ.get("CLIENT_ID", ""),
-        os.environ.get("CLIENT_SECRET", ""),
-        os.environ.get("IRC_TOKEN", ""),
-        os.environ.get("REDIRECT_URL", ""),
+        client_id=os.environ.get("CLIENT_ID", ""),
+        client_secret=os.environ.get("CLIENT_SECRET", ""),
+        irc_token=os.environ.get("IRC_TOKEN", ""),
+        app_token="",
+        redirect_url=os.environ.get("REDIRECT_URL", ""),
     ).store()
