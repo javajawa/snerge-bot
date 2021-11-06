@@ -117,6 +117,26 @@ class Bot(commands.Bot):  # type: ignore
 
         self.last_message = int(time.time())
 
+        if not message.author.is_mod:
+            return
+
+        if message.content == "!snerge":
+            LOGGER.info("Manual Snerge by %s", message.author.name)
+            await self.send_quote_actual()
+
+        if not message.content.startswith("!whence "):
+            return
+
+        word = message.content.split(" ")[1]
+        LOGGER.warning("Whence for %s", word)
+
+        if word not in self.prosegen.dictionary:
+            return
+
+        LOGGER.warning("Sending whence")
+        sources = self.prosegen.dictionary[word]
+        await self.target.send(str(sources))
+
     async def send_quote(self) -> None:
         if not self.target:
             LOGGER.info("No target initialised")
