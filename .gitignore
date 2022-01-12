@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: CC0-1.0
 
 /loaded_lrr_quotes.txt
+/parsed_state.json
 
 /tokens/
 /venv/
