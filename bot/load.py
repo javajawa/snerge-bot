@@ -71,7 +71,7 @@ def load_lrr_quotes() -> Generator[Tuple[str, str], None, None]:
 
     LOGGER.info("Added %d quotes to the LRR exclude list", len(exclude))
 
-    for page in range(1, 15):
+    for page in range(1, 16):
         yield from load_lrr_quote_page(page, exclude)
 
 

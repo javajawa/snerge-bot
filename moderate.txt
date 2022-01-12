@@ -46,3 +46,6 @@
 #2935 Don't be a James.
 #2160 I've realized how ugly you are.
 #2045 The game is fine. The problem is James.
+#2042 I cannot cast a Sharting Sphinx.
+#7889 I wanted to kill that guy, I saw red.
+#7618 I hacked a man in Reno, just to watch him die.
