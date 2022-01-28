@@ -13,6 +13,7 @@ from snerge import logging
 from .base import Response, WSGICallback, WSGIEnv
 from .oauth import OAuthHandler
 from .eventsub import EventHandler
+from .whence import WhenceHandler
 
 
 class StandAlone(gunicorn.app.base.Application):  # type: ignore
@@ -85,4 +86,4 @@ class Servlet:
         return Response(404, "text/plain", b"Not Found")
 
 
-__all__ = ["StandAlone", "Servlet", "OAuthHandler", "EventHandler"]
+__all__ = ["StandAlone", "Servlet", "OAuthHandler", "EventHandler", "WhenceHandler"]
