@@ -15,7 +15,7 @@ on:
       - published
 
 env:
-  SOURCES: prosegen bot
+  SOURCES: prosegen snerge
 
 jobs:
   reuse-lint:
