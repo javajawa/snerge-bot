@@ -42,5 +42,5 @@ except KeyboardInterrupt:
     pass
 finally:
     logger.warning("Closing down IRC bot")
-    bot.loop.create_task(bot.close())
+    bot.loop.create_task(bot.stop())
     bot_thread.join()

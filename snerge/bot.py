@@ -12,7 +12,7 @@ import random
 import threading
 import time
 
-from twitchio import Client, Channel, Message  # type: ignore
+from twitchio import Client, Channel, Chatter, Message  # type: ignore
 
 from snerge import logging
 from snerge.config import Config
@@ -26,6 +26,7 @@ class Bot(Client):  # type: ignore
     target: Optional[Channel]
     last_message: int
     _timer: Optional[threading.Timer]
+    _stop: bool = False
 
     def __init__(
         self, logger: logging.Logger, config: Config, app: App, quotes: ProseGen
@@ -53,11 +54,14 @@ class Bot(Client):  # type: ignore
         self.logger.info("Joining channel %s", self.config.channel)
         self.target = self.get_channel(self.config.channel)
 
-        if self.target:
-            self.logger.info("Connected to channel %s", self.config.channel)
+        if not self.target:
+            threading.Timer(5, self.join_channel).start()
             return
 
-        threading.Timer(5, self.join_channel).start()
+        self.logger.info("Connected to channel %s", self.config.channel)
+        asyncio.get_running_loop().create_task(
+            self.target.send("sergeSnerge Never fear, Snerge is here!")
+        )
 
     async def event_message(self, message: Message) -> None:
         # Ignore loop-back messages
@@ -66,18 +70,27 @@ class Bot(Client):  # type: ignore
 
         # Note when chat last happened
         self.last_message = int(time.time())
-        self.logger.debug("Saw a message as %d", self.last_message)
+        self.logger.debug("Saw a message at %d", self.last_message)
+
+        if not self.target:
+            return
 
         # Commands can only be processed by mods, when we can reply.
-        if not self.target and not message.author.is_mod:
+        chatter = self.target.get_chatter(message.author.name)
+
+        if not isinstance(chatter, Chatter) or not message.author.is_mod:
             return
 
         # !snerge command: send a quote!
-        if message.content.startswith("!snerge"):
+        content = message.content.lower()
+        if content == "!snerge" or content.startswith("!snerge "):
             self.logger.info("Manual Snerge by %s", message.author.name)
             await self.send_quote()
 
     def queue_quote(self) -> None:
+        if self._stop:
+            return
+
         # If we haven't managed to connect to the channel, wait a while.
         if not self.target:
             next_call = random.randint(*self.config.startup_probe)
@@ -111,11 +124,16 @@ class Bot(Client):  # type: ignore
         else:
             await self.target.send("sergeSnerge " + quote + " sergeSnerge")
 
-    async def close(self) -> None:
+    async def stop(self) -> None:
+        self._stop = True
+
         if self._timer:
             self._timer.cancel()
 
-        await super().close()
+        if self.target:
+            await self.target.send("sergeSnerge Sleepy time!")
+
+        await self.close()
 
 
 def get_quote(quotes: ProseGen, min_length: int, max_length: int) -> str:
@@ -131,7 +149,7 @@ def get_quote(quotes: ProseGen, min_length: int, max_length: int) -> str:
 
 def owo_magic(non_owo_string: str) -> str:
     """
-    Converts a non_owo_stirng to an owo_string
+    Converts a non_owo_string to an owo_string
 
     :param non_owo_string: normal string
 

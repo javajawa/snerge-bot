@@ -20,13 +20,15 @@ def init() -> None:
     if sys.stdout.isatty():
         handler = logging.StreamHandler()
         handler.setFormatter(
-            logging.Formatter("%(asctime)s [%(name)s:%(levelname)s] %(message)s", datefmt="%H:%M:%S")
+            logging.Formatter(
+                "%(asctime)s [%(name)s:%(levelname)s] %(message)s", datefmt="%H:%M:%S"
+            )
         )
         logger.addHandler(handler)
         logger.setLevel(logging.DEBUG)
     else:
         handler = JournalHandler(SYSLOG_IDENTIFIER="snerge-bot")
-        handler.setFormatter(logging.Formatter("[s%(name)s:%(levelname)s] %(message)s"))
+        handler.setFormatter(logging.Formatter("[%(name)s:%(levelname)s] %(message)s"))
 
         logger.addHandler(handler)
         logger.setLevel(logging.WARNING)

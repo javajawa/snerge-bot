@@ -111,7 +111,9 @@ class EventHandler:
             self.logger.warning("No reward in redemption event")
             return Response(204, "text/plain", b"")
 
-        reward = reward_event.get("reward", {})
+        reward: Union[str, Dict[str, Union[Dict[str, str], str]]] = reward_event.get(
+            "reward", {}
+        )
 
         if not isinstance(reward, dict) or "id" not in reward:
             self.logger.warning("No id in redemption event reward")

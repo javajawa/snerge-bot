@@ -10,7 +10,7 @@ from typing import Any, Generator, List, Tuple
 import json
 import requests
 
-from bs4 import BeautifulSoup, NavigableString  # type: ignore
+from bs4 import BeautifulSoup, NavigableString, Tag  # type: ignore
 
 from prosegen import ProseGen
 from snerge import logging
@@ -80,7 +80,7 @@ def load_lrr_quote_page(logger: logging.Logger, page: int, exclude: List[str]) -
 
     quotes = soup.find("ol", class_="quotes")
 
-    if not quotes:
+    if not quotes or not isinstance(quotes, Tag):
         return
 
     for quote in quotes.find_all("li"):

@@ -6,7 +6,7 @@
 Description=SnergeBot
 
 [Service]
-ExecStart=/usr/bin/python3 bot.py
+ExecStart=/srv/snerge-bot/venv/bin/python3 -m snerge
 User=eorzea
 Group=daemon
 WorkingDirectory=/srv/snerge-bot
