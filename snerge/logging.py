@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 import sys
 
-from systemd.journal import JournalHandler  # pylint: disable=import-error
+from systemd.journal import JournalHandler  # type: ignore # pylint: disable=import-error
 
 
 Logger = logging.Logger
