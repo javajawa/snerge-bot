@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 import sys
 
-from systemd.journal import JournalHandler  # type: ignore
+from systemd.journal import JournalHandler  # pylint: disable=import-error
 
 
 Logger = logging.Logger
@@ -31,7 +31,7 @@ def init() -> None:
         handler.setFormatter(logging.Formatter("[%(name)s:%(levelname)s] %(message)s"))
 
         logger.addHandler(handler)
-        logger.setLevel(logging.WARNING)
+        logger.setLevel(logging.INFO)
 
 
 def get_logger(name: str = "") -> logging.Logger:
