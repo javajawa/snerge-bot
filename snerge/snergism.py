@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-# vim: ts=4 expandtab nospell
-
-# SPDX-FileCopyrightText: 2020 Benedict Harcourt <ben.harcourt@harcourtprogramming.co.uk>
+# SPDX-FileCopyrightText: 2021 Benedict Harcourt <ben.harcourt@harcourtprogramming.co.uk>
 #
 # SPDX-License-Identifier: BSD-2-Clause
 
@@ -9,11 +7,14 @@
 
 from __future__ import annotations
 
-from bot.load import load_data
+from snerge import logging
+from snerge.quotes import load_data
 
 
 def main() -> None:
-    prosegen = load_data()
+    logging.init()
+
+    prosegen = load_data(logging.get_logger())
 
     for i in range(0, 20):
         wisdom = prosegen.make_statement(24)

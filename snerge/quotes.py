@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-# vim: nospell expandtab ts=4
-
-# SPDX-FileCopyrightText: 2020 Benedict Harcourt <ben.harcourt@harcourtprogramming.co.uk>
+# SPDX-FileCopyrightText: 2021 Benedict Harcourt <ben.harcourt@harcourtprogramming.co.uk>
 #
 # SPDX-License-Identifier: BSD-2-Clause
 
@@ -10,37 +8,37 @@ from __future__ import annotations
 from typing import Any, Generator, List, Tuple
 
 import json
-import logging
 import requests
 
 from bs4 import BeautifulSoup, NavigableString  # type: ignore
 
 from prosegen import ProseGen
+from snerge import logging
 
 
-LOGGER = logging.getLogger("snerge")
+StringGen = Generator[Tuple[str, str], None, None]
 
 
-def load_data() -> ProseGen:
+def load_data(logger: logging.Logger) -> ProseGen:
     instance = ProseGen(20)
 
     quotes = 0
-    for qid, quote in load_uno_quotes():
+    for qid, quote in load_uno_quotes(logger):
         quotes += 1
         instance.add_knowledge(quote, source=f"uno line {qid}")
-    LOGGER.info("Added %d Uno quotes", quotes)
+    logger.info("Added %d Uno quotes", quotes)
 
     quotes = 0
-    for qid, quote in load_lrr_quotes():
+    for qid, quote in load_lrr_quotes(logger):
         quotes += 1
         instance.add_knowledge(quote, source=f"lrr {qid}")
-    LOGGER.info("Added %d LRR quotes", quotes)
+    logger.info("Added %d LRR quotes", quotes)
 
     return instance
 
 
-def load_uno_quotes() -> Generator[Tuple[str, str], None, None]:
-    LOGGER.info("Loading quotes from Uno-db")
+def load_uno_quotes(logger: logging.Logger) -> StringGen:
+    logger.info("Loading quotes from Uno-db")
     data = requests.get(
         "https://raw.githubusercontent.com/RebelliousUno/BrewCrewQuoteDB/main/quotes.txt"
     )
@@ -60,25 +58,23 @@ def load_uno_quotes() -> Generator[Tuple[str, str], None, None]:
                 yield str(qid), str(quote)
 
 
-def load_lrr_quotes() -> Generator[Tuple[str, str], None, None]:
+def load_lrr_quotes(logger: logging.Logger) -> StringGen:
     exclude = []
 
-    with open("moderate.txt", "rt") as handle:
+    with open("moderate.txt", "rt", encoding="utf-8") as handle:
         for line in handle:
             line = line.strip()
             _id, _ = line.split(" ", 1)
             exclude.append(_id)
 
-    LOGGER.info("Added %d quotes to the LRR exclude list", len(exclude))
+    logger.info("Added %d quotes to the LRR exclude list", len(exclude))
 
     for page in range(1, 16):
-        yield from load_lrr_quote_page(page, exclude)
+        yield from load_lrr_quote_page(logger, page, exclude)
 
 
-def load_lrr_quote_page(
-    page: int, exclude: List[str]
-) -> Generator[Tuple[str, str], None, None]:
-    LOGGER.info("Loading LRR quote page %d", page)
+def load_lrr_quote_page(logger: logging.Logger, page: int, exclude: List[str]) -> StringGen:
+    logger.info("Loading LRR quote page %d", page)
     html = requests.get(f"https://lrrbot.com/quotes/search?q=serge&mode=name&page={page}")
     soup = BeautifulSoup(html.content, "html.parser")
 
@@ -113,12 +109,16 @@ class SetEncoder(json.JSONEncoder):
 
 
 def main() -> None:
-    with open("loaded_lrr_quotes.txt", "wt") as handle:
-        for quote_id, quote in load_lrr_quotes():
+    logging.init()
+    logger = logging.get_logger()
+
+    with open("loaded_lrr_quotes.txt", "wt", encoding="utf-8") as handle:
+        for quote_id, quote in load_lrr_quotes(logger):
             handle.write(f"{quote_id}, {quote}\n")
 
-    dataset = load_data()
-    with open("parsed_state.json", "wt") as handle:
+    dataset = load_data(logger)
+
+    with open("parsed_state.json", "wt", encoding="utf-8") as handle:
         json.dump(dataset.dictionary, handle, cls=SetEncoder)
 
 

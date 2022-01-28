@@ -12,6 +12,7 @@ pylint
 reuse
 
 types-requests
+types-beautifulsoup4
 
 twine
 wheel

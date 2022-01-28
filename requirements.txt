@@ -4,5 +4,5 @@
 
 beautifulsoup4
 requests
-twitchio~=1.1
+twitchio==2.1.4
 gunicorn

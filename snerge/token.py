@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-# vim: nospell expandtab ts=4
-
-# SPDX-FileCopyrightText: 2020 Benedict Harcourt <ben.harcourt@harcourtprogramming.co.uk>
+# SPDX-FileCopyrightText: 2021 Benedict Harcourt <ben.harcourt@harcourtprogramming.co.uk>
 #
 # SPDX-License-Identifier: BSD-2-Clause
 
@@ -79,3 +77,22 @@ class Token:
                 raise TypeError("Found incorrect token type: " + type(data))
 
             return data
+
+
+def refresh_app_token() -> App:
+    app = App.load()
+
+    response = requests.post(
+        "https://id.twitch.tv/oauth2/token",
+        {
+            "client_id": app.client_id,
+            "client_secret": app.client_secret,
+            "grant_type": "client_credentials",
+            "scope": "channel:read:redemptions",
+        },
+    )
+
+    app.app_token = response.json()["access_token"]
+    app.store()
+
+    return app
