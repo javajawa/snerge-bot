@@ -33,8 +33,7 @@ servlet.register_handler("/", handler1.handle)
 handler2 = server.EventHandler(logging.get_logger("webhook"), app, config, bot)
 servlet.register_handler("/webhook", handler2.handle_webhook)
 handler3 = server.WhenceHandler(data)
-servlet.register_handler("/whence", handler3.handle_page)
-servlet.register_handler("/whence.json", handler3.handle_search)
+servlet.register_prefix("/whence", handler3.handle)
 
 try:
     logger.info("Starting up IRC bot")

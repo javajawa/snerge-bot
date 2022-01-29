@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: BSD-2-Clause
 
-PATHS="snerge prosegen"
+PATHS="src"
 
 reuse lint
 black $PATHS

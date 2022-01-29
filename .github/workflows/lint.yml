@@ -15,7 +15,7 @@ on:
       - published
 
 env:
-  SOURCES: prosegen snerge
+  SOURCES: src
 
 jobs:
   reuse-lint:
