@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2022 Benedict Harcourt <ben.harcourt@harcourtprogramming.co.uk>
+//
+// SPDX-License-Identifier: BSD-2-Clause
+
 import { elemGenerator } from "https://javajawa.github.io/elems.js/elems.js";
 
 const ul = elemGenerator("ul");

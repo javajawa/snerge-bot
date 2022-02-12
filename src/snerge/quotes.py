@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Generator, List, Tuple
+from typing import Generator, List, Tuple
 
 import json
 import requests
@@ -14,6 +14,7 @@ from bs4 import BeautifulSoup, NavigableString, Tag  # type: ignore
 
 from prosegen import ProseGen
 from snerge import logging
+from snerge.util import SetEncoder
 
 
 StringGen = Generator[Tuple[str, str], None, None]
@@ -99,13 +100,6 @@ def load_lrr_quote_page(logger: logging.Logger, page: int, exclude: List[str]) -
 
         if attrib_text == "Serge":
             yield quote_id, quote_text
-
-
-class SetEncoder(json.JSONEncoder):
-    def default(self, o: Any) -> Any:
-        if isinstance(o, set):
-            return list(o)
-        return json.JSONEncoder.default(self, o)
 
 
 def main() -> None:

@@ -5,20 +5,15 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict
+from typing import Callable, Dict
 
 import json
 
 from prosegen import ProseGen
 
+from snerge.util import SetEncoder
+
 from .base import Response, File, WSGIEnv
-
-
-class SetEncoder(json.JSONEncoder):
-    def default(self, o: Any) -> Any:
-        if isinstance(o, set):
-            return list(o)
-        return json.JSONEncoder.default(self, o)
 
 
 class WhenceHandler:
