@@ -9,8 +9,6 @@ from typing import Optional
 
 import asyncio
 import random
-import threading
-import time
 
 from twitchio import Client, Channel, Chatter, Message  # type: ignore
 
@@ -25,44 +23,45 @@ class Bot(Client):  # type: ignore
     quotes: ProseGen
     target: Optional[Channel]
     last_message: int
-    _timer: Optional[threading.Timer]
+    _timer: Optional[asyncio.TimerHandle]
     _stop: bool = False
 
     def __init__(
-        self, logger: logging.Logger, config: Config, app: App, quotes: ProseGen
+        self,
+        logger: logging.Logger,
+        loop: asyncio.AbstractEventLoop,
+        config: Config,
+        app: App,
+        quotes: ProseGen,
     ) -> None:
 
         super().__init__(
             token=app.irc_token,
+            loop=loop,
             initial_channels=[config.channel],
         )
 
+        self._timer = None
         self.target = None
         self.last_message = 0
         self.logger = logger
         self.config = config
         self.quotes = quotes
 
-        self.queue_quote()
+    async def _start(self) -> None:
+        self.logger.info("Starting up IRC bot")
+
+        await super().start()
 
     async def event_ready(self) -> None:
         self.logger.info("Connected as %s", self.nick)
-        await self.join_channels([self.config.channel])
-        self.join_channel()
 
-    def join_channel(self) -> None:
-        """Attempt to join the channel, in a loop"""
-        self.logger.info("Joining channel %s", self.config.channel)
-        self.target = self.get_channel(self.config.channel)
+        while not self.target:
+            await self.join_channels([self.config.channel])
+            self.target = self.get_channel(self.config.channel)
 
-        if not self.target:
-            threading.Timer(5, self.join_channel).start()
-            return
-
-        self.logger.info("Connected to channel %s", self.config.channel)
-        asyncio.get_running_loop().create_task(
-            self.target.send("sergeSnerge Never fear, Snerge is here!")
-        )
+        await self.target.send("Never fear, Snerge is here!")
+        self.loop.create_task(self.queue_quote())
 
     async def event_message(self, message: Message) -> None:
         # Ignore loop-back messages
@@ -70,7 +69,7 @@ class Bot(Client):  # type: ignore
             return
 
         # Note when chat last happened
-        self.last_message = int(time.time())
+        self.last_message = int(self.loop.time())
         self.logger.debug("Saw a message at %d", self.last_message)
 
         if not self.target:
@@ -88,7 +87,7 @@ class Bot(Client):  # type: ignore
             self.logger.info("Manual Snerge by %s", message.author.name)
             await self.send_quote()
 
-    def queue_quote(self) -> None:
+    async def queue_quote(self) -> None:
         if self._stop:
             return
 
@@ -98,21 +97,19 @@ class Bot(Client):  # type: ignore
             self.logger.info("No target initialised, waiting %d seconds", next_call)
 
         # If we haven't heard from chat in a while, assume the stream is down
-        elif time.time() - self.last_message > self.config.chat_active_probe[0]:
+        elif self.loop.time() - self.last_message > self.config.chat_active_probe[0]:
             next_call = random.randint(*self.config.chat_active_probe)
             self.logger.debug("Chat not active, waiting %d seconds", next_call)
 
         # Otherwise, send off a quote
         else:
-            asyncio.run(self.send_quote())
+            self.loop.create_task(self.send_quote())
             next_call = random.randint(*self.config.auto_quote_time)
 
         # Queue the next attempt to send a quote
-        self._timer = threading.Timer(next_call, self.queue_quote)
-        self._timer.start()
-
-    def trigger_quote(self) -> None:
-        self.logger.warning(self.loop.call_soon_threadsafe(self.send_quote()))
+        self._timer = self.loop.call_later(
+            next_call, lambda: self.loop.create_task(self.queue_quote())
+        )
 
     async def send_quote(self) -> None:
         if not self.target:
@@ -169,25 +166,26 @@ def owo_magic(non_owo_string: str) -> str:
     )
 
 
-def main() -> None:
+async def main() -> None:
     from snerge import config, token, quotes  # pylint: disable=import-outside-toplevel
 
     logging.init()
     logger = logging.get_logger()
 
     app = token.refresh_app_token()
-    data = quotes.load_data(logger)
+    data = await quotes.load_data(logger, ProseGen(20))
 
     # Create the IRC bot
     bot = Bot(
         logger=logger,
+        loop=asyncio.get_event_loop(),
         app=app,
         config=config.config(),
         quotes=data,
     )
 
-    bot.run()
+    await bot.start()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

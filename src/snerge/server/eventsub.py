@@ -7,24 +7,23 @@ from __future__ import annotations
 
 from typing import Dict, Optional, Union
 
-import asyncio
 import dataclasses
 import hashlib
 import hmac
 import json
 import requests
 
-from snerge import bot, config, logging, token
-from .base import Response, WSGIEnv
+from aiohttp.web import Request, Response
+
+from snerge import bot, logging, token
 
 
 REQUIRED_HEADERS = [
-    "CONTENT_LENGTH",
-    "HTTP_TWITCH_EVENTSUB_MESSAGE_ID",
-    "HTTP_TWITCH_EVENTSUB_MESSAGE_TIMESTAMP",
-    "HTTP_TWITCH_EVENTSUB_SUBSCRIPTION_TYPE",
-    "HTTP_TWITCH_EVENTSUB_MESSAGE_TYPE",
-    "HTTP_TWITCH_EVENTSUB_MESSAGE_SIGNATURE",
+    "Twitch-Eventsub-Message-Id",
+    "Twitch-Eventsub-Message-Signature",
+    "Twitch-Eventsub-Message-Timestamp",
+    "Twitch-Eventsub-Message-Type",
+    "Twitch-Eventsub-Subscription-Type",
 ]
 
 
@@ -57,31 +56,25 @@ class TwitchEvent:
 
 class EventHandler:
     logger: logging.Logger
-    secret: bytes
 
     _app: token.App
     _bot: bot.Bot
 
-    def __init__(
-        self, logger: logging.Logger, app: token.App, conf: config.Config, _bot: bot.Bot
-    ) -> None:
+    def __init__(self, logger: logging.Logger, app: token.App, _bot: bot.Bot) -> None:
         self.logger = logger
-        self.secret = b"hello_i_am_snerge"
         self._app = app
         self._bot = _bot
 
-        asyncio.run(self.register(conf.channel))
-
-    def handle_webhook(self, environ: WSGIEnv) -> Response:
-        event = self.load_event(environ)
+    async def handle_webhook(self, request: Request) -> Response:
+        event = await self.load_event(request)
 
         if not event:
             self.logger.warning("Received invalid event")
-            return Response(400, "text/plain", b"Invalid event")
+            return Response(status=400, content_type="text/plain", text="Invalid event")
 
-        if not event.signature_valid(self.secret):
+        if not event.signature_valid(self._app.webhook_secret):
             self.logger.warning("Received event with invalid signature")
-            return Response(400, "text/plain", b"Incorrect Signature")
+            return Response(status=400, content_type="text/plain", text="Incorrect Signature")
 
         self.logger.info("%s web-hook event %s", event.subscription_type, event.message_type)
 
@@ -89,29 +82,34 @@ class EventHandler:
             return self.handle_verification_event(event)
 
         if event.subscription_type == "channel.channel_points_custom_reward_redemption.add":
-            return self.handle_reward_event(event)
+            return await self.handle_reward_event(event)
 
         if event.subscription_type != "channel.follow":
             self.logger.info(json.dumps(event.content, indent="  "))
 
-        return Response(204, "text/plain", b"")
+        return Response(status=204, content_type="text/plain", body=b"")
 
     def handle_verification_event(self, event: TwitchEvent) -> Response:
         challenge = event.content.get("challenge", None)
 
         if not isinstance(challenge, str):
             self.logger.warning("Verification callback with missing or invalid challenge")
-            return Response(400, "text/plain", b"Invalid or missing challenge")
+            return Response(
+                status=400, content_type="text/plain", text="Invalid or missing challenge"
+            )
 
-        self.logger.info("Callback complete for %s", event.content)
-        return Response(200, "text/plain", challenge.encode("utf-8"))
+        data = event.content.get("data", {})
+        if isinstance(data, dict):
+            self.logger.info("%s", data)
+            self.logger.info("Callback complete for %s %s", data.get("type"), data.get("id"))
+        return Response(status=200, content_type="text/plain", text=challenge)
 
-    def handle_reward_event(self, event: TwitchEvent) -> Response:
+    async def handle_reward_event(self, event: TwitchEvent) -> Response:
         reward_event = event.content.get("event", {})
 
         if not isinstance(reward_event, dict) or "reward" not in reward_event:
             self.logger.warning("No reward in redemption event")
-            return Response(204, "text/plain", b"")
+            return Response(status=204, content_type="text/plain", body=b"")
 
         reward: Union[str, Dict[str, Union[Dict[str, str], str]]] = reward_event.get(
             "reward", {}
@@ -119,28 +117,28 @@ class EventHandler:
 
         if not isinstance(reward, dict) or "id" not in reward:
             self.logger.warning("No id in redemption event reward")
-            return Response(204, "text/plain", b"")
+            return Response(status=204, content_type="text/plain", body=b"")
 
         if reward["id"] != "03979e28-d8c5-4985-8a32-fc27da71b3c1":
             self.logger.info("Skipping non-Snerge reward")
-            return Response(204, "text/plain", b"")
+            return Response(status=204, content_type="text/plain", body=b"")
 
         self.logger.info("Sending quote for reward")
-        self._bot.trigger_quote()
+        await self._bot.send_quote()
 
-        return Response(204, "text/plain", b"")
+        return Response(status=204, content_type="text/plain", body=b"")
 
-    def load_event(self, environ: WSGIEnv) -> Optional[TwitchEvent]:
+    async def load_event(self, request: Request) -> Optional[TwitchEvent]:
         # Check that we have all the data to load an event
-        missing = [key for key in REQUIRED_HEADERS if key not in environ]
+        missing = [key for key in REQUIRED_HEADERS if key not in request.headers]
+
         if missing:
             self.logger.info("Missing headers from event: %s", missing)
             return None
 
         # Load the POST payload (JSON)
         try:
-            length = int(environ["CONTENT_LENGTH"])
-            payload = environ["wsgi.input"].read(length)  # type: ignore
+            payload = await request.read()
             content = json.loads(payload)
         except (ValueError, json.JSONDecodeError) as err:
             self.logger.info("Unable to load json payload: %s", err)
@@ -153,11 +151,11 @@ class EventHandler:
 
         # Create the event object
         return TwitchEvent(
-            message_id=environ.get("HTTP_TWITCH_EVENTSUB_MESSAGE_ID", ""),
-            timestamp=environ.get("HTTP_TWITCH_EVENTSUB_MESSAGE_TIMESTAMP", ""),
-            signature=environ.get("HTTP_TWITCH_EVENTSUB_MESSAGE_SIGNATURE", ""),
-            subscription_type=environ.get("HTTP_TWITCH_EVENTSUB_SUBSCRIPTION_TYPE", ""),
-            message_type=environ.get("HTTP_TWITCH_EVENTSUB_MESSAGE_TYPE", ""),
+            message_id=request.headers.get("Twitch-Eventsub-Message-Id", ""),
+            timestamp=request.headers.get("Twitch-Eventsub-Message-Timestamp", ""),
+            signature=request.headers.get("Twitch-Eventsub-Message-Signature", "="),
+            message_type=request.headers.get("Twitch-Eventsub-Message-Type", ""),
+            subscription_type=request.headers.get("Twitch-Eventsub-Subscription-Type", ""),
             payload=payload,
             content=content,
         )
@@ -169,29 +167,59 @@ class EventHandler:
         if not user:
             self.logger.error("No token available for %s", username)
 
-        data = {
-            "type": "channel.channel_points_custom_reward_redemption.add",
-            "version": "1",
-            "condition": {
-                "broadcaster_user_id": str(user.user_id),
-            },
-            "transport": {
-                "method": "webhook",
-                "callback": "https://snerge.tea-cats.co.uk/webhook",
-                "secret": self.secret.decode("utf-8"),
-            },
-        }
+        user.renew(self._app)
 
-        self.logger.info("Registering webhook for %s", username)
+        for event_type in [
+            "channel.follow",
+            "channel.channel_points_custom_reward_redemption.add",
+        ]:
+            data = {
+                "type": event_type,
+                "version": "1",
+                "condition": {
+                    "broadcaster_user_id": str(user.user_id),
+                },
+                "transport": {
+                    "method": "webhook",
+                    "callback": "https://snerge.tea-cats.co.uk/webhook",
+                    "secret": self._app.webhook_secret.decode("utf-8"),
+                },
+            }
 
-        response = requests.post(
-            "https://api.twitch.tv/helix/eventsub/subscriptions",
-            json=data,
-            headers={
-                "Content-type": "application/json",
-                "Client-ID": self._app.client_id,
-                "Authorization": "Bearer " + self._app.app_token,
-            },
-        )
+            self.logger.info("Registering %s webhook for %s", event_type, username)
 
-        self.logger.warning("Webhook response: %s", response.json())
+            response = requests.post(
+                "https://api.twitch.tv/helix/eventsub/subscriptions",
+                json=data,
+                headers={
+                    "Content-type": "application/json",
+                    "Client-ID": self._app.client_id,
+                    "Authorization": "Bearer " + self._app.app_token,
+                },
+            )
+
+            subscription = response.json()
+
+            if not isinstance(subscription, dict):
+                self.logger.error("Unable to parse subscription response %s", subscription)
+                continue
+
+            if "data" in subscription:
+                self.logger.info(
+                    "Subscribe to %s for %s: %s",
+                    event_type,
+                    username,
+                    subscription["data"][0]["id"],
+                )
+                continue
+
+            error = subscription.get("error", "")
+            message = subscription.get("message", "")
+
+            if error == "Conflict" and message == "subscription already exists":
+                self.logger.info("Using old subscription for %s for %s", event_type, username)
+                continue
+
+            self.logger.warning(
+                "Error subscribing to %s for %s: %s", event_type, username, message
+            )

@@ -16,6 +16,7 @@ if __name__ == "__main__":
         client_secret=os.environ.get("CLIENT_SECRET", ""),
         irc_token=os.environ.get("IRC_TOKEN", ""),
         redirect_url=os.environ.get("REDIRECT_URL", ""),
+        webhook_secret=os.environ.get("WEBHOOK_SECRET", "").encode("utf-8"),
         app_token="",
     )
     app.store()

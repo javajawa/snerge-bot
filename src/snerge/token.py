@@ -18,6 +18,7 @@ class App:
     irc_token: str
     app_token: str
     redirect_url: str
+    webhook_secret: bytes
 
     def store(self) -> None:
         with open("tokens/_app.token", "wb") as handle:

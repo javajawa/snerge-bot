@@ -7,14 +7,19 @@
 
 from __future__ import annotations
 
+import asyncio
+
+from prosegen import ProseGen
+
 from snerge import logging
 from snerge.quotes import load_data
 
 
-def main() -> None:
+async def main() -> None:
     logging.init()
 
-    prosegen = load_data(logging.get_logger())
+    prosegen = ProseGen(20)
+    prosegen = await load_data(logging.get_logger(), prosegen)
 
     for i in range(0, 20):
         wisdom = prosegen.make_statement(24)
@@ -27,4 +32,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

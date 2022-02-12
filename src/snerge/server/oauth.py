@@ -9,14 +9,13 @@ from typing import List
 
 import dataclasses
 import random
-
-from urllib.parse import parse_qs
-
 import requests
 
+from aiohttp.web import Request, Response
+
 from snerge import logging
-from snerge.server.base import Response, WSGIEnv
 from snerge.token import App, Token
+from snerge.server.eventsub import EventHandler
 
 
 @dataclasses.dataclass
@@ -34,21 +33,22 @@ class OAuthHandler:
     app: App
     pending_auth_nonces: List[str]
 
-    def __init__(self, logger: logging.Logger, app: App) -> None:
+    def __init__(self, logger: logging.Logger, app: App, sub_manager: EventHandler) -> None:
         self.logger = logger
         self.app = app
         self.pending_auth_nonces = []
+        self.sub_manager = sub_manager
 
-    def handle(self, environ: WSGIEnv) -> Response:
+    async def handle(self, request: Request) -> Response:
         # If the user has just arrived, redirect them
         # to the oAuth flow on the Twitch site.
-        if "QUERY_STRING" not in environ:
+        if not request.query:
             return self.redirect_to_authorize()
 
-        return self.process_oauth_callback(environ)
+        return await self.process_oauth_callback(request)
 
     def redirect_to_authorize(self) -> Response:
-        state = hex(random.randrange(16**24)).zfill(24)
+        state = hex(random.randrange(16 ** 24)).zfill(24)
 
         destination = (
             "https://id.twitch.tv/oauth2/authorize"
@@ -63,28 +63,29 @@ class OAuthHandler:
         self.logger.info("Redirect created, nonce: %s", state)
 
         return Response(
-            307,
-            "text/plain",
-            b"Redirecting to " + destination.encode("utf-8"),
-            [("location", destination)],
+            status=307,
+            content_type="text/plain",
+            text="Redirecting to " + destination,
+            headers={"location": destination},
         )
 
-    def process_oauth_callback(self, environ: WSGIEnv) -> Response:
-        data = parse_qs(environ.get("QUERY_STRING", ""))
-        auth = data.get("state", [])
-        code = data.get("code", "")
+    async def process_oauth_callback(self, request: Request) -> Response:
+        auth = request.query.getall("state")
+        code = request.query.getall("code")
 
-        if len(auth) != 1 or not code or isinstance(code, list):
-            return Response(400, "text/plain", b"Missing or incorrect state info")
+        if len(auth) != 1 or len(code) != 1:
+            return Response(
+                status=400, content_type="text/plain", text="Missing or incorrect state info"
+            )
 
-        return self.handle_code(auth[0], code)
+        return await self.handle_code(auth[0], code[0])
 
-    def handle_code(self, our_nonce: str, their_nonce: str) -> Response:
+    async def handle_code(self, our_nonce: str, their_nonce: str) -> Response:
         self.logger.info("Getting auth token, nonce: %s", our_nonce)
 
         if our_nonce not in self.pending_auth_nonces:
             self.logger.info("Nonce %s is not a pending nonce", our_nonce)
-            return Response(400, "text/plain", b"Invalid state nonce")
+            return Response(status=400, content_type="text/plain", text="Invalid state nonce")
 
         self.pending_auth_nonces.remove(our_nonce)
 
@@ -104,13 +105,15 @@ class OAuthHandler:
         if "access_token" not in token_json:
             self.logger.warning("Unable to get token: %s", str(token_json))
             return Response(
-                500, "text/plain", b"Auth Error: " + str(token_json).encode("utf-8")
+                status=500,
+                content_type="text/plain",
+                text="Auth Error: " + str(token_json),
             )
 
         try:
             user = self.fetch_user_data(token_json["access_token"])
         except UserFetchError as error:
-            return Response(500, "text/plain", str(error).encode("utf-8"))
+            return Response(status=500, content_type="text/plain", text=str(error))
 
         new_token = Token(
             user.uid,
@@ -122,9 +125,11 @@ class OAuthHandler:
 
         self.logger.info("Successfully registered user %s", user)
 
-        message = f"Thank you {user}! Your credentials have been stored!"
+        await self.sub_manager.register(user.login)
 
-        return Response(200, "text/plain", message.encode("utf-8"))
+        message = f"Thank you {user.login}! Your credentials have been stored!"
+
+        return Response(status=200, content_type="text/plain", text=message)
 
     def fetch_user_data(self, access_token: str) -> TwitchUser:
         user_request = requests.get(

@@ -5,47 +5,62 @@
 
 from __future__ import annotations
 
-from typing import Callable, Dict
+from typing import Any, List
 
 import json
 
+from aiohttp.web import Request, Response, FileResponse, StreamResponse
 from prosegen import ProseGen
 
 from snerge.util import SetEncoder
 
-from .base import Response, File, WSGIEnv
-
 
 class WhenceHandler:
     quotes: ProseGen
-    mapping: Dict[str, Callable[[WSGIEnv], Response]]
+    mapping: List[Any] = []
 
     def __init__(self, quotes: ProseGen) -> None:
         self.quotes = quotes
-        self.mapping = {
-            "/": File("text/html", "html/whence/whence.html").serve,
-            "/whence.css": File("text/css", "html/whence/whence.css").serve,
-            "/whence.js": File("text/javascript", "html/whence/whence.js").serve,
-            "/search": self.handle_search,
-        }
 
-    def handle(self, path: str, environ: WSGIEnv) -> Response:
-        if path not in self.mapping:
-            return Response(404, "text/plain", b"Not Found")
+    @staticmethod
+    async def handle_static(request: Request) -> StreamResponse:
+        path = request.match_info.get("path", "")
 
-        return self.mapping[path](environ)
+        if path == "":
+            return FileResponse(
+                status=200,
+                headers={"Content-Type": "text/html"},
+                path="html/whence/whence.html",
+            )
 
-    def handle_search(self, environ: WSGIEnv) -> Response:
-        length = int(environ.get("CONTENT_LENGTH", "0"))
-        word = environ.get("wsgi.input").read(length)  # type: ignore
+        if path == "whence.js":
+            return FileResponse(
+                status=200,
+                headers={"Content-Type": "text/javascript"},
+                path="html/whence/whence.js",
+            )
+
+        if path == "whence.css":
+            return FileResponse(
+                status=200,
+                headers={"Content-Type": "text/css"},
+                path="html/whence/whence.css",
+            )
+
+        return Response(status=200, text=path)
+
+    async def handle_search(self, request: Request) -> Response:
+        word = await request.text()
 
         output = {}
 
-        for word in word.decode("utf-8").strip().split(" "):
+        for word in word.strip().split(" "):
             output[word] = (
                 self.quotes.dictionary[word] if word in self.quotes.dictionary else []
             )
 
         return Response(
-            200, "application/json", json.dumps(output, cls=SetEncoder).encode("utf-8")
+            status=200,
+            content_type="application/json",
+            text=json.dumps(output, cls=SetEncoder),
         )

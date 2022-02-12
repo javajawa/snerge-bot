@@ -20,9 +20,7 @@ from snerge.util import SetEncoder
 StringGen = Generator[Tuple[str, str], None, None]
 
 
-def load_data(logger: logging.Logger) -> ProseGen:
-    instance = ProseGen(20)
-
+async def load_data(logger: logging.Logger, instance: ProseGen) -> ProseGen:
     quotes = 0
     for qid, quote in load_uno_quotes(logger):
         quotes += 1
@@ -110,7 +108,8 @@ def main() -> None:
         for quote_id, quote in load_lrr_quotes(logger):
             handle.write(f"{quote_id}, {quote}\n")
 
-    dataset = load_data(logger)
+    dataset = ProseGen(20)
+    load_data(logger, dataset)
 
     with open("parsed_state.json", "wt", encoding="utf-8") as handle:
         json.dump(dataset.dictionary, handle, cls=SetEncoder)

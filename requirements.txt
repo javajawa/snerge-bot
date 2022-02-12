@@ -5,4 +5,4 @@
 beautifulsoup4
 requests
 twitchio==2.1.4
-gunicorn
+aiohttp~=3.7
