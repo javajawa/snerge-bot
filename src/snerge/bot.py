@@ -47,6 +47,7 @@ class Bot(Client):  # type: ignore
 
     async def event_ready(self) -> None:
         self.logger.info("Connected as %s", self.nick)
+        await self.join_channels([self.config.channel])
         self.join_channel()
 
     def join_channel(self) -> None:
@@ -109,6 +110,9 @@ class Bot(Client):  # type: ignore
         # Queue the next attempt to send a quote
         self._timer = threading.Timer(next_call, self.queue_quote)
         self._timer.start()
+
+    def trigger_quote(self) -> None:
+        self.logger.warning(self.loop.call_soon_threadsafe(self.send_quote()))
 
     async def send_quote(self) -> None:
         if not self.target:

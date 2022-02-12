@@ -10,6 +10,7 @@ ExecStart=/srv/snerge-bot/venv/bin/python3 -m snerge
 User=eorzea
 Group=daemon
 WorkingDirectory=/srv/snerge-bot
+Environment="PYTHONPATH=/srv/snerge-bot/src"
 
 [Install]
 WantedBy=multi-user.target

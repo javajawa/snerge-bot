@@ -88,10 +88,12 @@ class EventHandler:
         if event.message_type == "webhook_callback_verification":
             return self.handle_verification_event(event)
 
-        if event.message_type == "channel.channel_points_custom_reward_redemption.add":
+        if event.subscription_type == "channel.channel_points_custom_reward_redemption.add":
             return self.handle_reward_event(event)
 
-        self.logger.info(json.dumps(event.content, indent="  "))
+        if event.subscription_type != "channel.follow":
+            self.logger.info(json.dumps(event.content, indent="  "))
+
         return Response(204, "text/plain", b"")
 
     def handle_verification_event(self, event: TwitchEvent) -> Response:
@@ -124,7 +126,7 @@ class EventHandler:
             return Response(204, "text/plain", b"")
 
         self.logger.info("Sending quote for reward")
-        asyncio.run(self._bot.send_quote())
+        self._bot.trigger_quote()
 
         return Response(204, "text/plain", b"")
 
