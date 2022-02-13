@@ -26,7 +26,7 @@ class Bot(Client):  # type: ignore
     _timer: Optional[asyncio.TimerHandle]
     _stop: bool = False
 
-    def __init__(
+    def __init__(  # pylint: disable=too-many-arguments
         self,
         logger: logging.Logger,
         loop: asyncio.AbstractEventLoop,

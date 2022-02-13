@@ -8,6 +8,6 @@ PATHS="src"
 
 reuse lint
 black $PATHS
-flake8 $PATHS
-mypy --strict $PATHS
-pylint $PATHS
+python -m flake8 $PATHS
+python -m mypy --strict $PATHS
+python -m pylint $PATHS

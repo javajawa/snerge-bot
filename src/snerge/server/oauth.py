@@ -48,7 +48,7 @@ class OAuthHandler:
         return await self.process_oauth_callback(request)
 
     def redirect_to_authorize(self) -> Response:
-        state = hex(random.randrange(16 ** 24)).zfill(24)
+        state = hex(random.randrange(16**24)).zfill(24)
 
         destination = (
             "https://id.twitch.tv/oauth2/authorize"

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from typing import Generator, List, Tuple
 
+import asyncio
 import json
 import requests
 
@@ -109,7 +110,7 @@ def main() -> None:
             handle.write(f"{quote_id}, {quote}\n")
 
     dataset = ProseGen(20)
-    load_data(logger, dataset)
+    asyncio.run(load_data(logger, dataset))
 
     with open("parsed_state.json", "wt", encoding="utf-8") as handle:
         json.dump(dataset.dictionary, handle, cls=SetEncoder)
