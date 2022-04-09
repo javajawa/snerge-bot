@@ -10,7 +10,7 @@ from typing import Optional
 import asyncio
 import random
 
-from twitchio import Client, Channel, Chatter, Message  # type: ignore
+from twitchio import Client, Channel, Chatter, Message, User  # type: ignore
 
 from snerge import logging
 from snerge.config import Config
@@ -23,7 +23,6 @@ class Bot(Client):  # type: ignore
     quotes: ProseGen
     target: Optional[Channel]
     last_message: int
-    _timer: Optional[asyncio.TimerHandle]
     _stop: bool = False
 
     def __init__(  # pylint: disable=too-many-arguments
@@ -35,13 +34,8 @@ class Bot(Client):  # type: ignore
         quotes: ProseGen,
     ) -> None:
 
-        super().__init__(
-            token=app.irc_token,
-            loop=loop,
-            initial_channels=[config.channel],
-        )
+        super().__init__(token=app.irc_token, loop=loop)
 
-        self._timer = None
         self.target = None
         self.last_message = 0
         self.logger = logger
@@ -55,13 +49,20 @@ class Bot(Client):  # type: ignore
 
     async def event_ready(self) -> None:
         self.logger.info("Connected as %s", self.nick)
+        self.logger.info("Requesting to join %s", self.config.channel)
+        self.loop.create_task(self.join_channels([self.config.channel]), name="join-channel")
 
-        while not self.target:
-            await self.join_channels([self.config.channel])
-            self.target = self.get_channel(self.config.channel)
+    async def event_join(self, channel: Channel, user: User) -> None:
+        if channel.name != self.config.channel:
+            return
+        if user.name.lower() != self.nick.lower():
+            return
 
-        await self.target.send("Never fear, Snerge is here!")
-        self.loop.create_task(self.queue_quote())
+        self.target = self.get_channel(self.config.channel)
+
+        if self.target:
+            self.logger.info("Connected to channel %s", self.config.channel)
+            await self.target.send("Never fear, Snerge is here!")
 
     async def event_message(self, message: Message) -> None:
         # Ignore loop-back messages
@@ -88,28 +89,42 @@ class Bot(Client):  # type: ignore
             await self.send_quote()
 
     async def queue_quote(self) -> None:
-        if self._stop:
-            return
+        await self.connect()
 
-        # If we haven't managed to connect to the channel, wait a while.
-        if not self.target:
-            next_call = random.randint(*self.config.startup_probe)
-            self.logger.info("No target initialised, waiting %d seconds", next_call)
+        while not self._stop:
+            # If we haven't managed to connect to the channel, wait a while.
+            if not self.target:
+                next_call = random.randint(*self.config.startup_probe)
+                self.logger.info("No target initialised, waiting %d seconds", next_call)
 
-        # If we haven't heard from chat in a while, assume the stream is down
-        elif self.loop.time() - self.last_message > self.config.chat_active_probe[0]:
-            next_call = random.randint(*self.config.chat_active_probe)
-            self.logger.debug("Chat not active, waiting %d seconds", next_call)
+            # If we haven't heard from chat in a while, assume the stream is down
+            elif self.loop.time() - self.last_message > self.config.chat_active_probe[0]:
+                next_call = random.randint(*self.config.chat_active_probe)
+                self.logger.debug("Chat not active, waiting %d seconds", next_call)
 
-        # Otherwise, send off a quote
-        else:
-            self.loop.create_task(self.send_quote())
-            next_call = random.randint(*self.config.auto_quote_time)
+            # Otherwise, send off a quote
+            else:
+                await self.send_quote()
+                next_call = random.randint(*self.config.auto_quote_time)
 
-        # Queue the next attempt to send a quote
-        self._timer = self.loop.call_later(
-            next_call, lambda: self.loop.create_task(self.queue_quote())
-        )
+            # Queue the next attempt to send a quote
+            await self.sleep(next_call)
+
+        await self.close()
+
+    async def sleep(self, time: int) -> None:
+        target_time = self.loop.time() + time
+
+        while True:
+            if self._stop:
+                return
+
+            sleep_for = min(10.0, target_time - self.loop.time())
+
+            if sleep_for <= 0:
+                return
+
+            await asyncio.sleep(sleep_for)
 
     async def send_quote(self) -> None:
         if not self.target:
@@ -125,16 +140,14 @@ class Bot(Client):  # type: ignore
         else:
             await self.target.send("sergeSnerge " + quote + " sergeSnerge")
 
-    async def stop(self) -> None:
+    def request_stop(self) -> None:
         self._stop = True
 
-        if self._timer:
-            self._timer.cancel()
-
+    async def close(self) -> None:
         if self.target:
             await self.target.send("sergeSnerge Sleepy time!")
 
-        await self.close()
+        await super().close()
 
 
 def get_quote(quotes: ProseGen, min_length: int, max_length: int) -> str:

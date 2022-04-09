@@ -5,22 +5,14 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Awaitable, Callable
 
 import asyncio
+
 from aiohttp import web
 
 import prosegen
-from snerge import bot, config as conf, logging, quotes, server, token
-
-
-def process_task_exception(task: asyncio.Task[Any], logger: logging.Logger) -> None:
-    try:
-        exception = task.exception()
-        if exception:
-            logger.error(exception)
-    except (asyncio.InvalidStateError, asyncio.CancelledError):
-        pass
+from snerge import bot, config as conf, logging, quotes, server, token, AsyncRunner
 
 
 def main() -> None:
@@ -28,7 +20,8 @@ def main() -> None:
     logging.init()
 
     # Configure async
-    event_loop = asyncio.get_event_loop()
+    runner = AsyncRunner(logging.get_logger("runner"))
+    asyncio.set_event_loop(runner.loop)
 
     # Load our configuration
     logger = logging.get_logger()
@@ -40,26 +33,60 @@ def main() -> None:
 
     # Create the IRC bot
     irc_bot = bot.Bot(
-        logger=logging.get_logger("bot"), loop=event_loop, app=app, config=config, quotes=data
+        logger=logging.get_logger("bot"),
+        loop=runner.loop,
+        app=app,
+        config=config,
+        quotes=data,
     )
 
+    # Queue loading in the quotes database.
+    runner.create_onetime_task("quote-loader", quotes.load_data(logger, data))
+
+    # Create the event subscription handle, and initialise of it.
+    event_subscription_handler = server.EventHandler(
+        logging.get_logger("webhook"), app, irc_bot
+    )
+    register = runner.create_onetime_task(
+        "register-webhooks", event_subscription_handler.register(config.channel)
+    )
+
+    # Create the HTTP daemon and attack the handlers.
+    site_setup = runner.create_onetime_task(
+        "setup-httpd", create_httpd(app, data, event_subscription_handler.handle_webhook)
+    )
+
+    # Run the setup tasks until they are complete.
+    runner.gather(register, site_setup)
+
+    # Run the bot
+    _irc = runner.create_main_task("twitch-irc-bot", irc_bot.queue_quote())
+
+    runner.run_forever()
+
+    logger.warning("Commencing shutdown")
+    irc_bot.request_stop()
+    runner.gather(_irc, site_setup.result().server.shutdown())
+
+
+async def create_httpd(
+    app: token.App,
+    data: prosegen.ProseGen,
+    event_handler: Callable[[web.Request], Awaitable[web.StreamResponse]],
+) -> web.AppRunner:
     # Create the web UI controller
     servlet = web.Application()
 
     # Add the handlers to the website
-    handler2 = server.EventHandler(logging.get_logger("webhook"), app, irc_bot)
-    servlet.router.add_route("POST", "/webhook", handler2.handle_webhook)
+    servlet.router.add_route("POST", "/webhook", event_handler)
 
     handler3 = server.WhenceHandler(data)
     servlet.router.add_route("GET", "/whence/", handler3.handle_static)
     servlet.router.add_route("GET", "/whence/{path:.+}", handler3.handle_static)
     servlet.router.add_route("POST", "/whence/search", handler3.handle_search)
 
-    handler1 = server.OAuthHandler(logging.get_logger("oauth"), app, handler2)
+    handler1 = server.OAuthHandler(logging.get_logger("oauth"), app)
     servlet.router.add_route("GET", "/", handler1.handle)
-
-    event_loop.create_task(quotes.load_data(logger, data))
-    event_loop.create_task(handler2.register(config.channel))
 
     # Create the website container
     runner = web.AppRunner(
@@ -68,38 +95,12 @@ def main() -> None:
         access_log=logging.get_logger("server"),
         logger=logging.get_logger("server"),
     )
-    event_loop.run_until_complete(runner.setup())
 
+    await runner.setup()
     site = web.TCPSite(runner, "127.0.0.2", 8888)
+    await site.start()
 
-    # Run the bot
-    _web = event_loop.create_task(site.start())
-    _irc = event_loop.create_task(irc_bot.connect())
-
-    try:
-        event_loop.run_forever()
-    except KeyboardInterrupt:
-        logger.info("Interrupt received, exiting")
-    except Exception as err:  # pylint: disable=broad-except
-        logger.error("Loop exception: %s", err)
-
-    logger.warning("Commencing shutdown")
-    process_task_exception(_irc, logger)
-    process_task_exception(_web, logger)
-
-    logger.info("Shitting down IRC")
-    event_loop.run_until_complete(irc_bot.stop())
-    logger.info("Shitting down Web")
-    event_loop.run_until_complete(site.stop())
-    event_loop.run_until_complete(runner.cleanup())
-    logger.info("Waiting for IRC to exit")
-    event_loop.run_until_complete(_irc)
-    process_task_exception(_irc, logger)
-    logger.info("Waiting for Web to exit")
-    event_loop.run_until_complete(_web)
-    process_task_exception(_web, logger)
-    logger.info("Closing event loop")
-    event_loop.close()
+    return runner
 
 
 if __name__ == "__main__":
