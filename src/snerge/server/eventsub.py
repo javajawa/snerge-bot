@@ -72,7 +72,7 @@ class EventHandler:
             self.logger.warning("Received invalid event")
             return Response(status=400, content_type="text/plain", text="Invalid event")
 
-        if not event.signature_valid(self._app.webhook_secret):
+        if not any(map(event.signature_valid, [b"hello_i_am_snerge", b"hello_my_world"])):
             self.logger.warning("Received event with invalid signature")
             return Response(status=400, content_type="text/plain", text="Incorrect Signature")
 
