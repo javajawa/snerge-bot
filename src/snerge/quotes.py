@@ -5,46 +5,50 @@
 
 from __future__ import annotations
 
-from typing import Generator, List, Tuple
+from typing import AsyncGenerator, List, Tuple
 
 import asyncio
 import json
-import requests
 
-from bs4 import BeautifulSoup, NavigableString, Tag  # type: ignore
+import aiohttp
+
+from bs4 import BeautifulSoup, NavigableString, Tag
 
 from prosegen import ProseGen
 from snerge import logging
 from snerge.util import SetEncoder
 
 
-StringGen = Generator[Tuple[str, str], None, None]
+StringGen = AsyncGenerator[Tuple[str, str], None]
 
 
 async def load_data(logger: logging.Logger, instance: ProseGen) -> ProseGen:
-    quotes = 0
-    for qid, quote in load_uno_quotes(logger):
-        quotes += 1
-        instance.add_knowledge(quote, source=f"uno line {qid}")
-    logger.info("Added %d Uno quotes", quotes)
+    async with aiohttp.ClientSession() as session:
+        quotes = 0
+        async for qid, quote in load_uno_quotes(logger, session):
+            quotes += 1
+            instance.add_knowledge(quote, source=f"uno line {qid}")
+        logger.info("Added %d Uno quotes", quotes)
 
-    quotes = 0
-    for qid, quote in load_lrr_quotes(logger):
-        quotes += 1
-        instance.add_knowledge(quote, source=f"lrr {qid}")
-    logger.info("Added %d LRR quotes", quotes)
+        quotes = 0
+        async for qid, quote in load_lrr_quotes(logger, session):
+            quotes += 1
+            instance.add_knowledge(quote, source=f"lrr {qid}")
+        logger.info("Added %d LRR quotes", quotes)
 
     return instance
 
 
-def load_uno_quotes(logger: logging.Logger) -> StringGen:
+async def load_uno_quotes(
+    logger: logging.Logger, session: aiohttp.ClientSession
+) -> StringGen:
     logger.info("Loading quotes from Uno-db")
-    data = requests.get(
+    data = await session.get(
         "https://raw.githubusercontent.com/RebelliousUno/BrewCrewQuoteDB/main/quotes.txt"
     )
 
     qid = 0
-    for line in data.text.split("\n"):
+    for line in (await data.text()).split("\n"):
         qid += 1
         line = line.strip()
 
@@ -58,7 +62,9 @@ def load_uno_quotes(logger: logging.Logger) -> StringGen:
                 yield str(qid), str(quote)
 
 
-def load_lrr_quotes(logger: logging.Logger) -> StringGen:
+async def load_lrr_quotes(
+    logger: logging.Logger, session: aiohttp.ClientSession
+) -> StringGen:
     exclude = []
 
     with open("moderate.txt", "rt", encoding="utf-8") as handle:
@@ -70,13 +76,18 @@ def load_lrr_quotes(logger: logging.Logger) -> StringGen:
     logger.info("Added %d quotes to the LRR exclude list", len(exclude))
 
     for page in range(1, 16):
-        yield from load_lrr_quote_page(logger, page, exclude)
+        async for quote_id, quote in load_lrr_quote_page(logger, session, page, exclude):
+            yield quote_id, quote
 
 
-def load_lrr_quote_page(logger: logging.Logger, page: int, exclude: List[str]) -> StringGen:
+async def load_lrr_quote_page(
+    logger: logging.Logger, session: aiohttp.ClientSession, page: int, exclude: List[str]
+) -> StringGen:
     logger.info("Loading LRR quote page %d", page)
-    html = requests.get(f"https://lrrbot.com/quotes/search?q=serge&mode=name&page={page}")
-    soup = BeautifulSoup(html.content, "html.parser")
+    html = await session.get(
+        f"https://lrrbot.com/quotes/search?q=serge&mode=name&page={page}"
+    )
+    soup = BeautifulSoup(await html.text(), "html.parser")
 
     quotes = soup.find("ol", class_="quotes")
 
@@ -101,12 +112,13 @@ def load_lrr_quote_page(logger: logging.Logger, page: int, exclude: List[str]) -
             yield quote_id, quote_text
 
 
-def main() -> None:
+async def main() -> None:
     logging.init()
     logger = logging.get_logger()
+    session = aiohttp.ClientSession()
 
     with open("loaded_lrr_quotes.txt", "wt", encoding="utf-8") as handle:
-        for quote_id, quote in load_lrr_quotes(logger):
+        async for quote_id, quote in load_lrr_quotes(logger, session):
             handle.write(f"{quote_id}, {quote}\n")
 
     dataset = ProseGen(20)
@@ -117,4 +129,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
