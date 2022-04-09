@@ -15,7 +15,6 @@ from aiohttp.web import Request, Response
 
 from snerge import logging
 from snerge.token import App, Token
-from snerge.server.eventsub import EventHandler
 
 
 @dataclasses.dataclass
@@ -33,11 +32,10 @@ class OAuthHandler:
     app: App
     pending_auth_nonces: List[str]
 
-    def __init__(self, logger: logging.Logger, app: App, sub_manager: EventHandler) -> None:
+    def __init__(self, logger: logging.Logger, app: App) -> None:
         self.logger = logger
         self.app = app
         self.pending_auth_nonces = []
-        self.sub_manager = sub_manager
 
     async def handle(self, request: Request) -> Response:
         # If the user has just arrived, redirect them
@@ -124,8 +122,6 @@ class OAuthHandler:
         new_token.store()
 
         self.logger.info("Successfully registered user %s", user)
-
-        await self.sub_manager.register(user.login)
 
         message = f"Thank you {user.login}! Your credentials have been stored!"
 
