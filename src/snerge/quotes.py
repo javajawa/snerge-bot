@@ -12,17 +12,18 @@ import json
 
 import aiohttp
 
+from aiostream import stream  # type: ignore
 from bs4 import BeautifulSoup, NavigableString, Tag
 
 from prosegen import ProseGen
-from snerge import logging
+from snerge import log
 from snerge.util import SetEncoder
 
 
 StringGen = AsyncGenerator[Tuple[str, str], None]
 
 
-async def load_data(logger: logging.Logger, instance: ProseGen) -> ProseGen:
+async def load_data(logger: log.Logger, instance: ProseGen) -> ProseGen:
     async with aiohttp.ClientSession() as session:
         quotes = 0
         async for qid, quote in load_uno_quotes(logger, session):
@@ -39,9 +40,7 @@ async def load_data(logger: logging.Logger, instance: ProseGen) -> ProseGen:
     return instance
 
 
-async def load_uno_quotes(
-    logger: logging.Logger, session: aiohttp.ClientSession
-) -> StringGen:
+async def load_uno_quotes(logger: log.Logger, session: aiohttp.ClientSession) -> StringGen:
     logger.info("Loading quotes from Uno-db")
     data = await session.get(
         "https://raw.githubusercontent.com/RebelliousUno/BrewCrewQuoteDB/main/quotes.txt"
@@ -62,9 +61,7 @@ async def load_uno_quotes(
                 yield str(qid), str(quote)
 
 
-async def load_lrr_quotes(
-    logger: logging.Logger, session: aiohttp.ClientSession
-) -> StringGen:
+async def load_lrr_quotes(logger: log.Logger, session: aiohttp.ClientSession) -> StringGen:
     exclude = []
 
     with open("moderate.txt", "rt", encoding="utf-8") as handle:
@@ -75,13 +72,16 @@ async def load_lrr_quotes(
 
     logger.info("Added %d quotes to the LRR exclude list", len(exclude))
 
-    for page in range(1, 16):
-        async for quote_id, quote in load_lrr_quote_page(logger, session, page, exclude):
+    combined = stream.merge(
+        *[load_lrr_quote_page(logger, session, page, exclude) for page in range(1, 17)]
+    )
+    async with combined.stream() as streamer:
+        async for quote_id, quote in streamer:
             yield quote_id, quote
 
 
 async def load_lrr_quote_page(
-    logger: logging.Logger, session: aiohttp.ClientSession, page: int, exclude: List[str]
+    logger: log.Logger, session: aiohttp.ClientSession, page: int, exclude: List[str]
 ) -> StringGen:
     logger.info("Loading LRR quote page %d", page)
     html = await session.get(
@@ -113,8 +113,8 @@ async def load_lrr_quote_page(
 
 
 async def main() -> None:
-    logging.init()
-    logger = logging.get_logger()
+    log.init()
+    logger = log.get_logger()
     session = aiohttp.ClientSession()
 
     with open("loaded_lrr_quotes.txt", "wt", encoding="utf-8") as handle:

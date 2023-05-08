@@ -9,14 +9,14 @@ import signal
 from asyncio import Task
 from typing import Coroutine, Any, Optional
 
-from snerge import logging
+from snerge import log
 
 
 class AsyncRunner:
     _loop: asyncio.AbstractEventLoop
-    _logger: logging.Logger
+    _logger: log.Logger
 
-    def __init__(self, logger: logging.Logger):
+    def __init__(self, logger: log.Logger):
         self._loop = asyncio.new_event_loop()
         self._logger = logger
 

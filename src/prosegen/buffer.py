@@ -1,5 +1,4 @@
 #!/usr/bin/python3
-# vim: nospell expandtab ts=4
 
 # SPDX-FileCopyrightText: 2020 Benedict Harcourt <ben.harcourt@harcourtprogramming.co.uk>
 #
@@ -7,17 +6,13 @@
 
 from __future__ import annotations
 
-from typing import List
-
-import zlib
-
 
 class Buffer:
     size: int
     pos: int
-    data: List[str]
+    data: list[str]
 
-    def __init__(self, size: int):
+    def __init__(self, size: int) -> None:
         self.size = size
         self.pos = 0
         self.data = [""] * size
@@ -31,17 +26,17 @@ class Buffer:
 
     def hash(self, items: int) -> int:
         if items > self.size:
-            raise Exception("Attempting to hash more items than buffer size")
+            raise IndexError("Attempting to hash more items than buffer size")
 
         if items < 1:
-            raise Exception("Must hash at least one item")
+            raise IndexError("Must hash at least one item")
 
-        return zlib.crc32(" ".join(self.subset(items)).encode())
+        return hash(tuple(self.subset(items)))
 
     def to_str(self, items: int) -> str:
         return f"||{' '.join(self.subset(items))}||@{self.hash(items)}"
 
-    def subset(self, items: int) -> List[str]:
+    def subset(self, items: int) -> list[str]:
         start: int = self.pos - items
 
         if start >= 0:

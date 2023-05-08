@@ -12,19 +12,19 @@ import asyncio
 from aiohttp import web
 
 import prosegen
-from snerge import bot, config as conf, logging, quotes, server, token, AsyncRunner
+from snerge import bot, config as conf, log, quotes, server, token, AsyncRunner
 
 
 def main() -> None:
     # Configure logging
-    logging.init()
+    log.init()
 
     # Configure async
-    runner = AsyncRunner(logging.get_logger("runner"))
+    runner = AsyncRunner(log.get_logger("runner"))
     asyncio.set_event_loop(runner.loop)
 
     # Load our configuration
-    logger = logging.get_logger()
+    logger = log.get_logger()
     config = conf.config()
     data = prosegen.ProseGen(20)
 
@@ -33,7 +33,7 @@ def main() -> None:
 
     # Create the IRC bot
     irc_bot = bot.Bot(
-        logger=logging.get_logger("bot"),
+        logger=log.get_logger("bot"),
         loop=runner.loop,
         app=app,
         config=config,
@@ -44,9 +44,7 @@ def main() -> None:
     runner.create_onetime_task("quote-loader", quotes.load_data(logger, data))
 
     # Create the event subscription handle, and initialise of it.
-    event_subscription_handler = server.EventHandler(
-        logging.get_logger("webhook"), app, irc_bot
-    )
+    event_subscription_handler = server.EventHandler(log.get_logger("webhook"), app, irc_bot)
     register = runner.create_onetime_task(
         "register-webhooks", event_subscription_handler.register(config.channel)
     )
@@ -85,15 +83,15 @@ async def create_httpd(
     servlet.router.add_route("GET", "/whence/{path:.+}", handler3.handle_static)
     servlet.router.add_route("POST", "/whence/search", handler3.handle_search)
 
-    handler1 = server.OAuthHandler(logging.get_logger("oauth"), app)
+    handler1 = server.OAuthHandler(log.get_logger("oauth"), app)
     servlet.router.add_route("GET", "/", handler1.handle)
 
     # Create the website container
     runner = web.AppRunner(
         servlet,
         handle_signals=False,
-        access_log=logging.get_logger("server"),
-        logger=logging.get_logger("server"),
+        access_log=log.get_logger("server"),
+        logger=log.get_logger("server"),
     )
 
     await runner.setup()

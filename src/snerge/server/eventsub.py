@@ -15,7 +15,7 @@ import requests
 
 from aiohttp.web import Request, Response
 
-from snerge import bot, logging, token
+from snerge import bot, log, token
 
 
 REQUIRED_HEADERS = [
@@ -55,12 +55,12 @@ class TwitchEvent:
 
 
 class EventHandler:
-    logger: logging.Logger
+    logger: log.Logger
 
     _app: token.App
     _bot: bot.Bot
 
-    def __init__(self, logger: logging.Logger, app: token.App, _bot: bot.Bot) -> None:
+    def __init__(self, logger: log.Logger, app: token.App, _bot: bot.Bot) -> None:
         self.logger = logger
         self._app = app
         self._bot = _bot
@@ -196,6 +196,7 @@ class EventHandler:
                     "Client-ID": self._app.client_id,
                     "Authorization": "Bearer " + self._app.app_token,
                 },
+                timeout=15,
             )
 
             subscription = response.json()

@@ -12,7 +12,7 @@ import random
 
 from twitchio import Client, Channel, Chatter, Message, User  # type: ignore
 
-from snerge import logging
+from snerge import log
 from snerge.config import Config
 from snerge.token import App
 from prosegen import ProseGen
@@ -27,13 +27,12 @@ class Bot(Client):  # type: ignore
 
     def __init__(  # pylint: disable=too-many-arguments
         self,
-        logger: logging.Logger,
+        logger: log.Logger,
         loop: asyncio.AbstractEventLoop,
         config: Config,
         app: App,
         quotes: ProseGen,
     ) -> None:
-
         super().__init__(token=app.irc_token, loop=loop)
 
         self.target = None
@@ -136,7 +135,7 @@ class Bot(Client):  # type: ignore
 
         # There is a 0.5% chance of Snerge going UwU!
         if random.randint(0, 200) == 0:
-            await self.target.send("[UwU] " + owo_magic(quote) + " [UwU]")
+            await self.target.send("~UωU~ " + owo_magic(quote) + " ~UωU~")
         else:
             await self.target.send("sergeSnerge " + quote + " sergeSnerge")
 
@@ -182,8 +181,8 @@ def owo_magic(non_owo_string: str) -> str:
 async def main() -> None:
     from snerge import config, token, quotes  # pylint: disable=import-outside-toplevel
 
-    logging.init()
-    logger = logging.get_logger()
+    log.init()
+    logger = log.get_logger()
 
     app = token.refresh_app_token()
     data = await quotes.load_data(logger, ProseGen(20))

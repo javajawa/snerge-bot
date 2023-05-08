@@ -55,6 +55,7 @@ class Token:
                 "grant_type": "refresh_token",
                 "refresh_token": self.refresh_token,
             },
+            timeout=15,
         )
 
         token = token_request.json()
@@ -91,6 +92,7 @@ def refresh_app_token() -> App:
             "grant_type": "client_credentials",
             "scope": "channel:read:redemptions",
         },
+        timeout=15,
     )
 
     app.app_token = response.json()["access_token"]

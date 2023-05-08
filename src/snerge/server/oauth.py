@@ -13,7 +13,7 @@ import requests
 
 from aiohttp.web import Request, Response
 
-from snerge import logging
+from snerge import log
 from snerge.token import App, Token
 
 
@@ -28,11 +28,11 @@ class UserFetchError(Exception):
 
 
 class OAuthHandler:
-    logger: logging.Logger
+    logger: log.Logger
     app: App
     pending_auth_nonces: List[str]
 
-    def __init__(self, logger: logging.Logger, app: App) -> None:
+    def __init__(self, logger: log.Logger, app: App) -> None:
         self.logger = logger
         self.app = app
         self.pending_auth_nonces = []
@@ -96,6 +96,7 @@ class OAuthHandler:
                 "grant_type": "authorization_code",
                 "redirect_uri": self.app.redirect_url,
             },
+            timeout=15,
         )
 
         token_json = token_request.json()
@@ -134,6 +135,7 @@ class OAuthHandler:
                 "Authorization": "Bearer " + access_token,
                 "Client-ID": self.app.client_id,
             },
+            timeout=15,
         )
 
         user_json = user_request.json()

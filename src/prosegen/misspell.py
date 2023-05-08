@@ -23,7 +23,9 @@ _MAP = {
     "i'll": "I'll",
     # Serge <-> Snerge
     "serge": "Snerge",
+    "serge's": "Snerge's",
     "snerge": "Serge",
+    "snerge's": "Serge's",
     "snergebot": "Snerge",
     # Common (LRR+Mod) names
     "adam": "Adam",
@@ -33,12 +35,16 @@ _MAP = {
     "avi": "Avi",
     "avi_miller": "Avi",
     "beej": "Beej",
+    "beej's": "Beej's",
     "ben": "Ben",
     "bengineering": "Bengineering",
+    "ben's": "Ben's",
     "diabore": "Diabore",
     "dix": "Dix",
     "fugi": "Fugi",
     "james": "James",
+    "james'": "James's",
+    "james's": "James's",
     "jacob": "Jacob",
     "jo": "Jo",
     "joe": "Joe",
@@ -66,9 +72,10 @@ _MAP = {
     "kitsune": "FoxDiety",
     # Custom spelling
     "cus": "because",
+    "'cuz": "because",
     "cuz": "because",
-    "diorite": "diorite (the best block)",
-    # An old misspell list (maybe the word one?)
+    "diorite": "diorite",
+    # An old misspell list (maybe the Microsoft Word one?)
     "abandonned": "abandoned",
     "aberation": "aberration",
     "abilityes": "abilities",
