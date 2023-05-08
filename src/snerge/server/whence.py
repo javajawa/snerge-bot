@@ -52,12 +52,17 @@ class WhenceHandler:
     async def handle_search(self, request: Request) -> Response:
         word = await request.text()
 
-        output = {}
+        output: dict[str, list[dict[str, str | list[str]]]] = {}
+        tokens = self.quotes.dictionary.keys()
 
         for word in word.strip().split(" "):
-            output[word] = (
-                self.quotes.dictionary[word] if word in self.quotes.dictionary else []
-            )
+            for token in tokens:
+                if word.lower() in token.lower():
+                    data = self.quotes.dictionary[token]
+                    output[token] = [
+                        {"source": fact.source, "text": fact.original, "tokens": fact.tokens}
+                        for fact in data
+                    ]
 
         return Response(
             status=200,
