@@ -8,7 +8,9 @@ from __future__ import annotations
 from typing import AsyncGenerator, List, Tuple
 
 import asyncio
+import csv
 import json
+import re
 
 import aiohttp
 
@@ -26,39 +28,29 @@ StringGen = AsyncGenerator[Tuple[str, str], None]
 async def load_data(logger: log.Logger, instance: ProseGen) -> ProseGen:
     async with aiohttp.ClientSession() as session:
         quotes = 0
-        async for qid, quote in load_uno_quotes(logger, session):
+        async for qid, quote in load_uno_quotes(logger):
             quotes += 1
-            instance.add_knowledge(quote, source=f"uno line {qid}")
+            instance.add_knowledge(quote, source=f"Uno #{qid}")
         logger.info("Added %d Uno quotes", quotes)
 
         quotes = 0
         async for qid, quote in load_lrr_quotes(logger, session):
             quotes += 1
-            instance.add_knowledge(quote, source=f"lrr {qid}")
+            instance.add_knowledge(quote, source=f"LRR #{qid}")
         logger.info("Added %d LRR quotes", quotes)
 
     return instance
 
 
-async def load_uno_quotes(logger: log.Logger, session: aiohttp.ClientSession) -> StringGen:
+async def load_uno_quotes(logger: log.Logger) -> StringGen:
     logger.info("Loading quotes from Uno-db")
-    data = await session.get(
-        "https://raw.githubusercontent.com/RebelliousUno/BrewCrewQuoteDB/main/quotes.txt"
-    )
+    line: dict[str, str]
 
-    qid = 0
-    for line in (await data.text()).split("\n"):
-        qid += 1
-        line = line.strip()
+    with open("quotes.csv", "r", encoding="utf-8") as quotes:
+        reader = csv.DictReader(quotes)
 
-        if not line:
-            continue
-
-        line_quotes = line.split('"')[1:]
-
-        for quote, attr in zip(*[iter(line_quotes)] * 2):
-            if "Serge" in attr or "Snerge" in attr:
-                yield str(qid), str(quote)
+        for line in reader:
+            yield line["id"], line["quote"].strip('"')
 
 
 async def load_lrr_quotes(logger: log.Logger, session: aiohttp.ClientSession) -> StringGen:
@@ -73,7 +65,7 @@ async def load_lrr_quotes(logger: log.Logger, session: aiohttp.ClientSession) ->
     logger.info("Added %d quotes to the LRR exclude list", len(exclude))
 
     combined = stream.merge(
-        *[load_lrr_quote_page(logger, session, page, exclude) for page in range(1, 17)]
+        *[load_lrr_quote_page(logger, session, page, exclude) for page in range(1, 18)]
     )
     async with combined.stream() as streamer:
         async for quote_id, quote in streamer:
@@ -112,20 +104,79 @@ async def load_lrr_quote_page(
             yield quote_id, quote_text
 
 
+async def download_new_quote_list(session: aiohttp.ClientSession) -> None:
+    response = await session.get(
+        "https://raw.githubusercontent.com/RebelliousUno/BrewCrewQuoteDB/main/quotes.csv"
+    )
+
+    data = (await response.text(encoding="utf-8")).split("\n")
+
+    line: dict[str, str]
+    reader = csv.DictReader(data[1:], next(csv.reader([data[0]])), escapechar=None)
+    matcher = re.compile(r'"\\s*-\\s*[^,]+,')
+
+    with open("quotes.csv", "w", encoding="utf-8") as quotes:
+        writer = csv.DictWriter(quotes, ["id", "date", "author", "quote"])
+        writer.writeheader()
+        for line in reader:
+            if line["id"] == "'-1":
+                continue
+
+            # Fix up double CSV-quoting by reparsing the fields.
+            line = {k: next(csv.reader([v], escapechar=None))[0] for k, v in line.items()}
+
+            author = line["author"].lower()
+
+            # ignore anything with multiple attributions.
+            if " and " in author or matcher.match(line["quote"]):
+                continue
+
+            # Ignore anything not from Serge (or feedback from Snerge)
+            if not author.startswith(("serge", "snerge")):
+                continue
+
+            # Ignore purely action lines
+            if '"' not in line["quote"]:
+                continue
+
+            # Sometimes people use fancy quotes
+            line["quote"] = line["quote"].replace("’", "'")
+            line["quote"] = clean_quote(line["quote"]) or ""
+
+            if line["quote"]:
+                writer.writerow(line)
+
+
+def clean_quote(quote: str) -> str | None:
+    leading_action = re.compile(r'^\\*[^*"]+\\* ("[^"]+")$')
+    trailing_action = re.compile(r'^("[^"]+") \\*[^*"]+\\*$')
+
+    trailer = trailing_action.match(quote)
+    leader = leading_action.match(quote)
+
+    if trailer:
+        return trailer.group(1) if len(trailer.group(1)) > 24 else None
+
+    if leader:
+        return leader.group(1) if len(leader.group(1)) > 24 else None
+
+    return quote
+
+
 async def main() -> None:
     log.init()
     logger = log.get_logger()
-    session = aiohttp.ClientSession()
 
-    with open("loaded_lrr_quotes.txt", "wt", encoding="utf-8") as handle:
-        async for quote_id, quote in load_lrr_quotes(logger, session):
-            handle.write(f"{quote_id}, {quote}\n")
+    async with aiohttp.ClientSession() as session:
+        with open("loaded_lrr_quotes.txt", "wt", encoding="utf-8") as handle:
+            async for quote_id, quote in load_lrr_quotes(logger, session):
+                handle.write(f"{quote_id}, {quote}\n")
 
     dataset = ProseGen(20)
-    asyncio.run(load_data(logger, dataset))
+    await load_data(logger, dataset)
 
     with open("parsed_state.json", "wt", encoding="utf-8") as handle:
-        json.dump(dataset.dictionary, handle, cls=SetEncoder)
+        json.dump(dataset.dictionary, handle, cls=SetEncoder, indent=2)
 
 
 if __name__ == "__main__":
