@@ -26,7 +26,9 @@ StringGen = AsyncGenerator[Tuple[str, str], None]
 
 
 async def load_data(logger: log.Logger, instance: ProseGen) -> ProseGen:
-    combined = stream.merge(load_sergisms(logger), load_uno_quotes(logger), load_lrr_quotes(logger))
+    combined = stream.merge(
+        load_sergisms(logger), load_uno_quotes(logger), load_lrr_quotes(logger)
+    )
 
     async with combined.stream() as streamer:
         async for quote_id, quote in streamer:
