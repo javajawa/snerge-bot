@@ -78,10 +78,16 @@ async def create_httpd(
     # Add the handlers to the website
     servlet.router.add_route("POST", "/webhook", event_handler)
 
-    handler3 = server.WhenceHandler(data)
-    servlet.router.add_route("GET", "/whence/", handler3.handle_static)
-    servlet.router.add_route("GET", "/whence/{path:.+}", handler3.handle_static)
-    servlet.router.add_route("POST", "/whence/search", handler3.handle_search)
+    whence = server.WhenceHandler(data)
+    servlet.router.add_route("GET", "/whence/", whence.handle_static)
+    servlet.router.add_route("GET", "/whence/{path:.+}", whence.handle_static)
+    servlet.router.add_route("POST", "/whence/search", whence.handle_search)
+
+    predict = server.PredictHandler(data)
+    servlet.router.add_route("GET", "/predict/", predict.handle_static)
+    servlet.router.add_route("GET", "/predict/{path:.+}", predict.handle_static)
+    servlet.router.add_route("GET", "/predict/dictionary", predict.get_dictionary)
+    servlet.router.add_route("POST", "/predict/predict", predict.make_prediction)
 
     handler1 = server.OAuthHandler(log.get_logger("oauth"), app)
     servlet.router.add_route("GET", "/", handler1.handle)

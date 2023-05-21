@@ -7,7 +7,8 @@ from __future__ import annotations
 
 from .oauth import OAuthHandler
 from .eventsub import EventHandler
+from .predict import PredictHandler
 from .whence import WhenceHandler
 
 
-__all__ = ["OAuthHandler", "EventHandler", "WhenceHandler"]
+__all__ = ["OAuthHandler", "EventHandler", "PredictHandler", "WhenceHandler"]

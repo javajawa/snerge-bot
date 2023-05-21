@@ -4,7 +4,8 @@
 
 import { elemGenerator } from "https://javajawa.github.io/elems.js/elems.js";
 
-const div = elemGenerator("div");
+const p = elemGenerator("p");
+const li = elemGenerator("li");
 const summary = elemGenerator("summary");
 const details = elemGenerator("details");
 const span = elemGenerator("code");
@@ -20,29 +21,24 @@ function search() {
 	url.search = "?search=" + term;
 	window.history.replaceState({"search": term}, window.title, url)
 
-	fetch('search', {method: 'POST', body: term})
+	fetch('predict', {method: 'POST', body: term})
 		.then(r => r.json())
-		.then(r => Object.entries(r))
-		.then(r => r.map(([word, refs]) =>
-			details(
-				r.length === 1 ? {"open": "open"} : null,
-				summary(word, " (", refs.length.toString(), ")"),
-				refs.map(ref => details(
-					summary(ref.source, " - ", ref.text),
-					ref.tokens.map(token => [span(token), " "])
-				))
-			)
+		.then(({input, output}) => details(
+			{"open": "open"},
+			summary(output.text),
+			p(input.text, " - ", input.tokens.map(token => [span(token), " "])),
+			p(output.tokens.map(token => [span(token), " "])),
 		))
-		.then(elements => {
-			const oldList = document.getElementById("results");
-			const newList = div({"id": "results"}, elements);
-			oldList.parentElement.replaceChild(newList, oldList);
+		.then(element => {
+			const list = document.getElementById("results");
+			list.firstElementChild?.removeAttribute("open");
+			list.insertBefore(element, list.firstElementChild || null);
 		});
 }
 
 const searchBox = document.getElementById("search");
 let debounce = null;
 searchBox.addEventListener("change", () => {window.clearTimeout(debounce); search()});
-searchBox.addEventListener("keyup", () => {window.clearTimeout(debounce); debounce = window.setTimeout(search, 500)});
+searchBox.addEventListener("keyup", () => {window.clearTimeout(debounce); debounce = window.setTimeout(search, 1000)});
 searchBox.value = (new URLSearchParams(window.location.search).get("search")) || "";
 search()

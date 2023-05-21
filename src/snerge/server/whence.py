@@ -5,8 +5,6 @@
 
 from __future__ import annotations
 
-from typing import Any, List
-
 import json
 
 from aiohttp.web import Request, Response, FileResponse, StreamResponse
@@ -17,7 +15,6 @@ from snerge.util import SetEncoder
 
 class WhenceHandler:
     quotes: ProseGen
-    mapping: List[Any] = []
 
     def __init__(self, quotes: ProseGen) -> None:
         self.quotes = quotes

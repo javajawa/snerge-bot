@@ -80,6 +80,7 @@ _MAP = {
     "ejgrgunner": "chat",
     "kevintheshark": "chat",
     "vezon": "chat",
+    "f1shor": "chat",
     # Custom spelling
     "cus": "because",
     "'cuz": "because",

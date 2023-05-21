@@ -77,6 +77,8 @@ PUNCTUATION: dict[str, Punctuation] = {
     "[!CLOSE_BRACKETS]": Punctuation(
         ")", False, True, block_open="[!OPEN_BRACKETS]", block_close="[!CLOSE_BRACKETS]"
     ),
+    "[!BIG_NUMBER]": Punctuation("69", True, True),
+    "[!NUMBER]": Punctuation("off-by-one", True, True),
 }
 
 
@@ -246,23 +248,7 @@ class GeneratedQuote:
             if token is None or token == "[!END]":
                 return self.output.strip()
 
-            self.buffer.push(token)
-
-            if token in PUNCTUATION:
-                self.process_punctuation_token(token)
-            else:
-                self.append_token(token)
-
-    def append_token(self, token: str) -> None:
-        if self.next_token_in_title_case:
-            token = token[0].title() + token[1:] if len(token) > 1 else token.upper()
-
-        if self.space_before_next_token:
-            self.output += " "
-        self.output += token
-
-        self.next_token_in_title_case = False
-        self.space_before_next_token = True
+            self.append_token(token)
 
     def get_potential_token(self) -> str | None:
         options: Counter[str] = Counter()
@@ -272,7 +258,7 @@ class GeneratedQuote:
             if item in self.prose.dataset:
                 options += self.prose.dataset[item]
 
-        if not self.can_end:
+        if not self._can_end:
             del options["[!END]"]
 
         for in_block in self.block_stack:
@@ -286,7 +272,26 @@ class GeneratedQuote:
         i = random.randrange(sum(options.values()))
         return next(itertools.islice(options.elements(), i, None))
 
-    def process_punctuation_token(self, token: str, in_block_change: bool = False) -> None:
+    def append_token(self, token: str) -> None:
+        self.buffer.push(token)
+
+        if token in PUNCTUATION:
+            self._process_punctuation_token(token)
+        else:
+            self._append_token(token)
+
+    def _append_token(self, token: str) -> None:
+        if self.next_token_in_title_case:
+            token = token[0].title() + token[1:] if len(token) > 1 else token.upper()
+
+        if self.space_before_next_token:
+            self.output += " "
+        self.output += token
+
+        self.next_token_in_title_case = False
+        self.space_before_next_token = True
+
+    def _process_punctuation_token(self, token: str, in_block_change: bool = False) -> None:
         punctuation = PUNCTUATION.get(token)
         if not punctuation:
             return
@@ -298,15 +303,15 @@ class GeneratedQuote:
         was_title = self.next_token_in_title_case
 
         if not in_block_change and punctuation.block_close:
-            if not self.handle_block_change(token, punctuation):
+            if not self._handle_block_change(token, punctuation):
                 return
 
-        self.append_token(punctuation.text)
+        self._append_token(punctuation.text)
 
         self.space_before_next_token = punctuation.space_after
         self.next_token_in_title_case = was_title or punctuation.capital_after
 
-    def handle_block_change(self, token: str, punctuation: Punctuation) -> bool:
+    def _handle_block_change(self, token: str, punctuation: Punctuation) -> bool:
         if punctuation.block_open == token:
             # If we're already in this block, we prevent opening it again.
             if punctuation.block_open in self.block_stack:
@@ -326,10 +331,10 @@ class GeneratedQuote:
             if opening_punctuation.block_close == token:
                 return True
 
-            self.process_punctuation_token(opening_punctuation.block_close or "", True)
+            self._process_punctuation_token(opening_punctuation.block_close or "", True)
 
         raise ValueError("Escaped block closing?")
 
     @property
-    def can_end(self) -> bool:
+    def _can_end(self) -> bool:
         return len(self.output) > self.min_length and not self.block_stack
