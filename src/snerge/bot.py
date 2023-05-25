@@ -161,19 +161,17 @@ class Bot(Client):  # type: ignore
 def get_quote(
     quotes: ProseGen, min_length: int, max_length: int, prompt: str | None = None
 ) -> str:
-    if prompt:
-        initial_tokens = Fact(prompt, "chat")
-        generator = GeneratedQuote(quotes, min_length)
-
-        for token in initial_tokens.tokens:
-            if token in quotes.dictionary:
-                generator.append_token(token)
-
-        return generator.make_statement()
+    initial_tokens = [
+        x for x in Fact(prompt or "", "chat").tokens if x and x in quotes.dictionary
+    ]
 
     # Max 100 attempts to generate a quote
     for _ in range(100):
-        wisdom = quotes.make_statement(min_length)
+        generator = GeneratedQuote(quotes, min_length)
+        for token in initial_tokens:
+            generator.append_token(token)
+
+        wisdom = generator.make_statement()
 
         if min_length < len(wisdom) < max_length:
             return wisdom
