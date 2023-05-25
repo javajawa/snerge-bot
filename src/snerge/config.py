@@ -29,7 +29,7 @@ def config() -> Config:
     backoff_message_sent = (1500, 2100)
     # How long a quote should be (to prevent one word quotes and sentences that
     # fill the entire screen).
-    message_length = (24, 80)
+    message_length = (24, 100)
 
     return Config(
         "sergeyager",
