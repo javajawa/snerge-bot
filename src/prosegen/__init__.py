@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from .prosegen import ProseGen
+from .prosegen import ProseGen, Fact, GeneratedQuote
 
 
-__all__ = ["ProseGen"]
+__all__ = ["ProseGen", "Fact", "GeneratedQuote"]

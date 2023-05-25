@@ -15,7 +15,7 @@ from twitchio import Client, Channel, Chatter, Message, User  # type: ignore
 from snerge import log
 from snerge.config import Config
 from snerge.token import App
-from prosegen import ProseGen
+from prosegen import ProseGen, Fact, GeneratedQuote
 
 
 class Bot(Client):  # type: ignore
@@ -51,7 +51,7 @@ class Bot(Client):  # type: ignore
         self.logger.info("Requesting to join %s", self.config.channel)
         self.loop.create_task(self.join_channels([self.config.channel]), name="join-channel")
 
-    async def event_reconnect(self):
+    async def event_reconnect(self) -> None:
         self.logger.info("Reconnect occurred")
         self.target = None
         self.loop.create_task(self.join_channels([self.config.channel]), name="join-channel")
@@ -90,7 +90,7 @@ class Bot(Client):  # type: ignore
         content = message.content.lower()
         if content == "!snerge" or content.startswith("!snerge "):
             self.logger.info("Manual Snerge by %s", message.author.name)
-            await self.send_quote()
+            await self.send_quote(content.replace("!snerge", "").strip())
 
     async def queue_quote(self) -> None:
         await self.connect()
@@ -130,11 +130,11 @@ class Bot(Client):  # type: ignore
 
             await asyncio.sleep(sleep_for)
 
-    async def send_quote(self) -> None:
+    async def send_quote(self, prompt: str | None = None) -> None:
         if not self.target:
             return
 
-        quote = get_quote(self.quotes, *self.config.quote_length)
+        quote = get_quote(self.quotes, *self.config.quote_length, prompt)
 
         self.logger.info("Sending quote %s", quote)
 
@@ -154,7 +154,19 @@ class Bot(Client):  # type: ignore
         await super().close()
 
 
-def get_quote(quotes: ProseGen, min_length: int, max_length: int) -> str:
+def get_quote(
+    quotes: ProseGen, min_length: int, max_length: int, prompt: str | None = None
+) -> str:
+    if prompt:
+        initial_tokens = Fact(prompt, "chat")
+        generator = GeneratedQuote(quotes, min_length)
+
+        for token in initial_tokens.tokens:
+            if token in quotes.dictionary:
+                generator.append_token(token)
+
+        return generator.make_statement()
+
     # Max 100 attempts to generate a quote
     for _ in range(100):
         wisdom = quotes.make_statement(min_length)
