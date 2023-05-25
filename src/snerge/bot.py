@@ -88,6 +88,10 @@ class Bot(Client):  # type: ignore
 
         # !snerge command: send a quote!
         content = message.content.lower()
+
+        if content.startswith("!unoquote "):
+            self.logger.info(message.content)
+
         if content == "!snerge" or content.startswith("!snerge "):
             self.logger.info("Manual Snerge by %s", message.author.name)
             await self.send_quote(content.replace("!snerge", "").strip())
