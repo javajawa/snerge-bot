@@ -76,7 +76,7 @@ class EventHandler:
             self.logger.warning("Received event with invalid signature")
             return Response(status=400, content_type="text/plain", text="Incorrect Signature")
 
-        self.logger.info("%s web-hook event %s", event.subscription_type, event.message_type)
+        self.logger.debug("%s web-hook event %s", event.subscription_type, event.message_type)
 
         if event.message_type == "webhook_callback_verification":
             return self.handle_verification_event(event)
@@ -120,7 +120,7 @@ class EventHandler:
             return Response(status=204, content_type="text/plain", body=b"")
 
         if reward["id"] != "03979e28-d8c5-4985-8a32-fc27da71b3c1":
-            self.logger.info("Skipping non-Snerge reward")
+            self.logger.debug("Skipping non-Snerge reward")
             return Response(status=204, content_type="text/plain", body=b"")
 
         self.logger.info("Sending quote for reward")

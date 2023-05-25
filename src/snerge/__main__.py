@@ -96,7 +96,7 @@ async def create_httpd(
     runner = web.AppRunner(
         servlet,
         handle_signals=False,
-        access_log=log.get_logger("server"),
+        access_log=None,
         logger=log.get_logger("server"),
     )
 
