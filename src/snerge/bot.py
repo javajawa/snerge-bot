@@ -5,8 +5,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 import asyncio
 import random
 
@@ -21,7 +19,6 @@ from prosegen import ProseGen, Fact, GeneratedQuote
 class Bot(Client):  # type: ignore
     config: Config
     quotes: ProseGen
-    target: Optional[Channel]
     last_message: int
     _stop: bool = False
 
@@ -35,7 +32,6 @@ class Bot(Client):  # type: ignore
     ) -> None:
         super().__init__(token=app.irc_token, loop=loop)
 
-        self.target = None
         self.last_message = 0
         self.logger = logger
         self.config = config
@@ -53,8 +49,7 @@ class Bot(Client):  # type: ignore
 
     async def event_reconnect(self) -> None:
         self.logger.info("Reconnect occurred")
-        self.target = None
-        self.loop.create_task(self.join_channels([self.config.channel]), name="join-channel")
+        self.loop.call_later(5, self.join_channels, [self.config.channel])
 
     async def event_join(self, channel: Channel, user: User) -> None:
         if channel.name != self.config.channel:
@@ -62,11 +57,11 @@ class Bot(Client):  # type: ignore
         if user.name.lower() != self.nick.lower():
             return
 
-        self.target = self.get_channel(self.config.channel)
+        target = self.get_channel(self.config.channel)
 
-        if self.target:
+        if target:
             self.logger.info("Connected to channel %s", self.config.channel)
-            await self.target.send("Never fear, Snerge is here!")
+            await target.send("Never fear, Snerge is here!")
 
     async def event_message(self, message: Message) -> None:
         # Ignore loop-back messages
@@ -77,11 +72,11 @@ class Bot(Client):  # type: ignore
         self.last_message = int(self.loop.time())
         self.logger.debug("Saw a message at %d", self.last_message)
 
-        if not self.target:
+        if not (target := self.get_channel(self.config.channel)):
             return
 
         # Commands can only be processed by mods, when we can reply.
-        chatter = self.target.get_chatter(message.author.name)
+        chatter = target.get_chatter(message.author.name)
 
         if not isinstance(chatter, Chatter) or not message.author.is_mod:
             return
@@ -101,7 +96,7 @@ class Bot(Client):  # type: ignore
 
         while not self._stop:
             # If we haven't managed to connect to the channel, wait a while.
-            if not self.target:
+            if not self.get_channel(self.config.channel):
                 next_call = random.randint(*self.config.startup_probe)
                 self.logger.info("No target initialised, waiting %d seconds", next_call)
 
@@ -135,7 +130,7 @@ class Bot(Client):  # type: ignore
             await asyncio.sleep(sleep_for)
 
     async def send_quote(self, prompt: str | None = None) -> None:
-        if not self.target:
+        if not (target := self.get_channel(self.config.channel)):
             return
 
         quote = get_quote(self.quotes, *self.config.quote_length, prompt)
@@ -144,16 +139,16 @@ class Bot(Client):  # type: ignore
 
         # There is a 0.5% chance of Snerge going UwU!
         if random.randint(0, 200) == 0:
-            await self.target.send("~UωU~ " + owo_magic(quote) + " ~UωU~")
+            await target.send("~UωU~ " + owo_magic(quote) + " ~UωU~")
         else:
-            await self.target.send("sergeSnerge " + quote + " sergeSnerge")
+            await target.send("sergeSnerge " + quote + " sergeSnerge")
 
     def request_stop(self) -> None:
         self._stop = True
 
     async def close(self) -> None:
-        if self.target:
-            await self.target.send("sergeSnerge Sleepy time!")
+        if target := self.get_channel(self.config.channel):
+            await target.send("sergeSnerge Sleepy time!")
 
         await super().close()
 
