@@ -296,14 +296,17 @@ class GeneratedQuote:
         if not punctuation:
             return
 
+        was_space = self.space_before_next_token
+        was_title = self.next_token_in_title_case
+
         self.space_before_next_token = (
             self.space_before_next_token and punctuation.space_before
         )
 
-        was_title = self.next_token_in_title_case
-
         if not in_block_change and punctuation.block_close:
             if not self._handle_block_change(token, punctuation):
+                self.space_before_next_token = was_space
+                self.next_token_in_title_case = was_title
                 return
 
         self._append_token(punctuation.text)
