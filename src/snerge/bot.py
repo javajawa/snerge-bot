@@ -45,11 +45,16 @@ class Bot(Client):  # type: ignore
     async def event_ready(self) -> None:
         self.logger.info("Connected as %s", self.nick)
         self.logger.info("Requesting to join %s", self.config.channel)
-        self.loop.create_task(self.join_channels([self.config.channel]), name="join-channel")
+        self.loop.create_task(self.join(), name="join-channel")
 
     async def event_reconnect(self) -> None:
         self.logger.info("Reconnect occurred")
-        self.loop.call_later(5, self.join_channels, [self.config.channel])
+        self.loop.create_task(self.join(), name="join-channel")
+
+    async def join(self) -> None:
+        await asyncio.sleep(5)
+        self.logger.info("Joining channel %s", self.config.channel)
+        await self.join_channels([self.config.channel])
 
     async def event_join(self, channel: Channel, user: User) -> None:
         if channel.name != self.config.channel:
