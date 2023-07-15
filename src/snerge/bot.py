@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import Awaitable, Callable
 
 import asyncio
+import os.path
 import random
 
 from twitchio import Client, Channel, Chatter, Message, User  # type: ignore
@@ -56,6 +57,8 @@ class Bot(Client):  # type: ignore
             "!stats": self.guess_handler.stats,
             "!snerge": lambda _, prompt: self.send_quote(prompt),
             "!snuwuge": lambda _, prompt: self.send_quote(prompt, force_owo=True),
+            "!subscribe": self.subscribe,
+            "!unsubscribe": self.subscribe,
         }
 
         twitchio.client.logger = logger.getChild("client")
@@ -124,6 +127,34 @@ class Bot(Client):  # type: ignore
 
         self.logger.info("Command %s from %s", command, chatter.display_name)
         await call(message.channel, content)
+
+    async def subscribe(self, chatter: Chatter, topic: str) -> None:
+        if topic not in [
+            "snerge",
+            "snerge facts",
+            "snergefacts",
+            "serge facts",
+            "sergefacts",
+        ]:
+            return
+
+        if os.path.exists(os.path.join("subscribed", chatter.name)):
+            await chatter.send("You are already subscribed to SnergeFacts.")
+            return
+
+        if not (target := self.get_channel(self.config.channel)):
+            return
+
+        with open(os.path.join("subscribed", chatter.name), "w", encoding="utf-8"):
+            pass
+
+        await target.send(
+            (
+                f"Thank you {chatter.name} for subscribing to SnergeFacts! "
+                "Here's a special SnergeFact for you!"
+            )
+        )
+        await self.send_quote()
 
     async def queue_quote(self) -> None:
         await self.connect()
