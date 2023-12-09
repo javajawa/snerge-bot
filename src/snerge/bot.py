@@ -13,6 +13,7 @@ from twitchio import Client, Channel, Chatter, Message, User  # type: ignore
 from snerge import log
 from snerge.config import Config
 from snerge.token import App
+from snerge.guessmessagehandler import GuessMessageHandler
 from prosegen import ProseGen, Fact, GeneratedQuote
 
 
@@ -21,6 +22,7 @@ class Bot(Client):  # type: ignore
     quotes: ProseGen
     last_message: int
     _stop: bool = False
+    guess_handler : GuessHandler
 
     def __init__(  # pylint: disable=too-many-arguments
         self,
@@ -36,6 +38,7 @@ class Bot(Client):  # type: ignore
         self.logger = logger
         self.config = config
         self.quotes = quotes
+        self.guess_handler = guess_handler(self.config.use_latest_reply)
 
     async def _start(self) -> None:
         self.logger.info("Starting up IRC bot")
