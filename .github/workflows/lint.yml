@@ -9,6 +9,7 @@ on:
   push:
     branches:
       - mainline
+      - updates
   pull_request:
   release:
     types:
