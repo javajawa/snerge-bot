@@ -112,12 +112,13 @@ class Bot(Client):  # type: ignore
         command = command.lower()
 
         commands: dict[str, Callable[[Channel, str], Awaitable[None]]] = {
-            "guesscommands": self.guess_handler.guess_commands,
-            "startguessing": self.guess_handler.start_guessing,
-            "stopguessing": self.guess_handler.stop_guessing,
-            "score": self.guess_handler.score,
-            "stats": self.guess_handler.stats,
-            "snerge": lambda _, prompt: self.send_quote(prompt),
+            "!guesscommands": self.guess_handler.guess_commands,
+            "!startguessing": self.guess_handler.start_guessing,
+            "!stopguessing": self.guess_handler.stop_guessing,
+            "!score": self.guess_handler.score,
+            "!stats": self.guess_handler.stats,
+            "!snerge": lambda _, prompt: self.send_quote(prompt),
+            "!snuwuge": lambda _, prompt: self.send_quote(prompt, force_owo=True),
         }
 
         call = commands.get(command)
@@ -165,7 +166,7 @@ class Bot(Client):  # type: ignore
 
             await asyncio.sleep(sleep_for)
 
-    async def send_quote(self, prompt: str | None = None) -> None:
+    async def send_quote(self, prompt: str | None = None, force_owo: bool = False) -> None:
         if not (target := self.get_channel(self.config.channel)):
             return
 
@@ -174,7 +175,7 @@ class Bot(Client):  # type: ignore
         self.logger.info("Sending quote %s", quote)
 
         # There is a 0.5% chance of Snerge going UwU!
-        if random.randint(0, 200) == 0:
+        if force_owo or random.randint(0, 200) == 0:
             await target.send("~UωU~ " + owo_magic(quote) + " ~UωU~")
         else:
             await target.send("sergeSnerge " + quote + " sergeSnerge")
