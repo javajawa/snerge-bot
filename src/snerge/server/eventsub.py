@@ -170,7 +170,6 @@ class EventHandler:
         user.renew(self._app)
 
         for event_type in [
-            "channel.follow",
             "channel.channel_points_custom_reward_redemption.add",
         ]:
             data = {
