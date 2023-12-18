@@ -1,6 +1,3 @@
-SPDX-FileCopyrightText: 2023 Serge Yager
-SPDX-License-Identifier: LicenseRef-Proprietary-Brew-Crew
-
 This data is sourced from Serge's Discord,
 with permission of the moderation team and Serge Yager, whose quotes these are.
 
