@@ -24,10 +24,11 @@ from prosegen import ProseGen, Fact, GeneratedQuote
 class Bot(Client):  # type: ignore
     config: Config
     quotes: ProseGen
-    last_message: int
-    _stop: bool = False
     guess_handler: GuessMessageHandler
     commands: dict[str, Callable[[Channel, str], Awaitable[None]]]
+
+    last_message: int = 0
+    _stop: bool = False
 
     def __init__(  # pylint: disable=too-many-arguments
         self,
@@ -39,7 +40,6 @@ class Bot(Client):  # type: ignore
     ) -> None:
         super().__init__(token=app.irc_token, loop=loop)
 
-        self.last_message = 0
         self.logger = logger
         self.config = config
         self.quotes = quotes
@@ -90,11 +90,8 @@ class Bot(Client):  # type: ignore
         if user.name.lower() != self.nick.lower():
             return
 
-        target = self.get_channel(self.config.channel)
-
-        if target:
-            self.logger.info("Connected to channel %s", self.config.channel)
-            await target.send("Never fear, Snerge is here!")
+        self.logger.info("Connected to channel %s", self.config.channel)
+        await channel.send("Never fear, Snerge is here!")
 
     async def event_message(self, message: Message) -> None:
         # Ignore loop-back messages
@@ -215,6 +212,8 @@ class Bot(Client):  # type: ignore
         if target := self.get_channel(self.config.channel):
             await target.send("sergeSnerge Sleepy time!")
 
+        self._closing.set()
+        await asyncio.sleep(2)
         await super().close()
 
 
