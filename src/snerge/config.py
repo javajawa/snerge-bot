@@ -11,12 +11,15 @@ import dataclasses
 
 
 @dataclasses.dataclass
-class Config:
+class Config:  # pylint: disable=too-many-instance-attributes
     channel: str
     startup_probe: Tuple[int, int]
     chat_active_probe: Tuple[int, int]
     auto_quote_time: Tuple[int, int]
     quote_length: Tuple[int, int]
+    use_latest_reply: bool
+    stopguess_delay: int
+    closest_without_going_over: bool
 
 
 def config() -> Config:
@@ -30,6 +33,13 @@ def config() -> Config:
     # How long a quote should be (to prevent one word quotes and sentences that
     # fill the entire screen).
     message_length = (24, 100)
+    # GUESSBOT
+    # Use the latest reply someone uses
+    use_latest_reply = True
+    # Delay between receiving the stop guessing command and actually stopping guesses
+    stopguess_delay = 5
+    # Report the closest without going over
+    closest_without_going_over = False
 
     return Config(
         "sergeyager",
@@ -37,4 +47,7 @@ def config() -> Config:
         backoff_no_chatters,
         backoff_message_sent,
         message_length,
+        use_latest_reply,
+        stopguess_delay,
+        closest_without_going_over,
     )

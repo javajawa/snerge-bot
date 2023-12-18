@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+from typing import Awaitable, Callable
+
 import asyncio
 import random
 
@@ -14,6 +16,7 @@ import twitchio.client  # type: ignore
 from snerge import log
 from snerge.config import Config
 from snerge.token import App
+from snerge.guessmessagehandler import GuessMessageHandler
 from prosegen import ProseGen, Fact, GeneratedQuote
 
 
@@ -22,6 +25,7 @@ class Bot(Client):  # type: ignore
     quotes: ProseGen
     last_message: int
     _stop: bool = False
+    guess_handler: GuessMessageHandler
 
     def __init__(  # pylint: disable=too-many-arguments
         self,
@@ -37,6 +41,11 @@ class Bot(Client):  # type: ignore
         self.logger = logger
         self.config = config
         self.quotes = quotes
+        self.guess_handler = GuessMessageHandler(
+            self.config.use_latest_reply,
+            self.config.stopguess_delay,
+            self.config.closest_without_going_over,
+        )
 
         twitchio.client.logger = logger.getChild("client")
 
@@ -73,7 +82,7 @@ class Bot(Client):  # type: ignore
 
     async def event_message(self, message: Message) -> None:
         # Ignore loop-back messages
-        if not message.author or message.author.name.lower() == self.nick.lower():
+        if message.echo:
             return
 
         # Note when chat last happened
@@ -83,21 +92,38 @@ class Bot(Client):  # type: ignore
         if not (target := self.get_channel(self.config.channel)):
             return
 
-        # Commands can only be processed by mods, when we can reply.
         chatter = target.get_chatter(message.author.name)
-
-        if not isinstance(chatter, Chatter) or not message.author.is_mod:
+        if not isinstance(chatter, Chatter):
             return
 
-        # !snerge command: send a quote!
-        content = message.content.lower()
+        # Run the guess handler,
+        await self.guess_handler.message_process(message, chatter)
 
-        if content.startswith("!unoquote "):
-            self.logger.info(message.content)
+        # Commands can only be processed by mods, when we can reply.
+        if not (chatter.is_mod or chatter.is_broadcaster):
+            return
 
-        if content == "!snerge" or content.startswith("!snerge "):
-            self.logger.info("Manual Snerge by %s", message.author.name)
-            await self.send_quote(content.replace("!snerge", "").strip())
+        if " " not in message.content:
+            return
+
+        command, _, content = message.content.parition(" ")
+        command = command.lower()
+
+        commands: dict[str, Callable[[Channel, str], Awaitable[None]]] = {
+            "guesscommands": self.guess_handler.guess_commands,
+            "startguessing": self.guess_handler.start_guessing,
+            "stopguessing": self.guess_handler.stop_guessing,
+            "score": self.guess_handler.score,
+            "stats": self.guess_handler.stats,
+            "snerge": lambda _, prompt: self.send_quote(prompt),
+        }
+
+        call = commands.get(command)
+
+        if not call:
+            return
+
+        await call(message.channel, content)
 
     async def queue_quote(self) -> None:
         await self.connect()
