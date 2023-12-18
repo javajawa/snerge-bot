@@ -14,7 +14,7 @@ import re
 
 import aiohttp
 
-from aiostream import stream  # type: ignore
+from aiostream import stream
 from bs4 import BeautifulSoup, NavigableString, Tag
 
 from prosegen import ProseGen

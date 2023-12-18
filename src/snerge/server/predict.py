@@ -28,13 +28,6 @@ class PredictHandler:
     async def handle_static(request: Request) -> StreamResponse:
         path = request.match_info.get("path", "")
 
-        if path == "":
-            return FileResponse(
-                status=200,
-                headers={"Content-Type": "text/html"},
-                path="html/predict/predict.html",
-            )
-
         if path == "predict.js":
             return FileResponse(
                 status=200,
@@ -47,6 +40,13 @@ class PredictHandler:
                 status=200,
                 headers={"Content-Type": "text/css"},
                 path="html/predict/predict.css",
+            )
+
+        if path == "":
+            return FileResponse(
+                status=200,
+                headers={"Content-Type": "text/html"},
+                path="html/predict/predict.html",
             )
 
         return Response(status=200, text=path)

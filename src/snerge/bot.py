@@ -61,7 +61,9 @@ class Bot(Client):  # type: ignore
 
     async def event_reconnect(self) -> None:
         self.logger.info("Reconnect occurred")
-        self.loop.call_later(10, lambda: self.loop.create_task(self.join(), name="join-channel"))
+        self.loop.call_later(
+            10, lambda: self.loop.create_task(self.join(), name="join-channel")
+        )
 
     async def join(self) -> None:
         await asyncio.sleep(5)
