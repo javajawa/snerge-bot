@@ -48,7 +48,7 @@ class GuessMessageHandler:
         if self.is_guess(message.content):
             return await self.record_guess(chatter, message.content, message.channel)
 
-        command, _, content = message.content.parition(" ")
+        command, _, content = message.content.partition(" ")
         command = command.lower()
 
         if command == "!guess":
@@ -104,7 +104,7 @@ class GuessMessageHandler:
         await self.stats(channel, _)
 
     async def score(self, channel: Channel, scoreval: str) -> None:
-        if self.bot_state != GuessHandlerBotState.HOLDING_FOR_ANSWER:
+        if self.bot_state == GuessHandlerBotState.COLLECTING_VALS:
             await channel.send("Please call !stopguessing before asking for a score")
             return
 
@@ -142,7 +142,7 @@ class GuessMessageHandler:
     async def stats(self, channel: Channel, _: str) -> None:
         stats = self.guesses.stats()
         message = (
-            f"{stats['count']} results between {stats['min']}-{stats['max']}."
+            f"{stats['count']} results between {stats['min']}-{stats['max']}. "
             f"Mean:{stats['mean']}, StDev:{stats['stdev']:.1f}. Median:{stats['median']}"
         )
 

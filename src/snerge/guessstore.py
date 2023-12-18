@@ -28,12 +28,11 @@ class GuessStore:
         self, value: float, closest_without_going_over: bool
     ) -> tuple[list[str], set[int]]:
         # Find the score value to use as a result
-        raw_values = list(self.guesses.values())
 
         if closest_without_going_over:
-            winning_values = {max(val for val in raw_values if val <= value)}
+            winning_values = {max(val for val in self.guesses.values() if val <= value)}
         else:
-            diffs = [(i, abs(i - value)) for i in raw_values]
+            diffs = [(i, abs(i - value)) for i in self.guesses.values()]
             min_diff = min(diff[1] for diff in diffs)
             winning_values = {diff[0] for diff in diffs if diff[1] == min_diff}
 
@@ -49,11 +48,9 @@ class GuessStore:
 
         return {
             "count": self.num_replies(),
-            "min": min(raw_values),
-            "max": max(raw_values),
-            "mean": statistics.mean(raw_values),
-            "stdev": statistics.stdev(raw_values),
-            "median": statistics.median(raw_values),
-            "multimode": statistics.multimode(raw_values),
-            "quartiles": statistics.quantiles(raw_values, n=4),
+            "min": min(raw_values) if raw_values else 0,
+            "max": max(raw_values) if raw_values else 0,
+            "mean": statistics.mean(raw_values) if raw_values else 0,
+            "stdev": statistics.stdev(raw_values) if len(raw_values) > 1 else 0,
+            "median": statistics.median(raw_values) if raw_values else 0,
         }
