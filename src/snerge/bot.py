@@ -26,6 +26,7 @@ class Bot(Client):  # type: ignore
     last_message: int
     _stop: bool = False
     guess_handler: GuessMessageHandler
+    commands: dict[str, Callable[[Channel, str], Awaitable[None]]]
 
     def __init__(  # pylint: disable=too-many-arguments
         self,
@@ -46,6 +47,16 @@ class Bot(Client):  # type: ignore
             self.config.stopguess_delay,
             self.config.closest_without_going_over,
         )
+
+        self.commands = {
+            "!guesscommands": self.guess_handler.guess_commands,
+            "!startguessing": self.guess_handler.start_guessing,
+            "!stopguessing": self.guess_handler.stop_guessing,
+            "!score": self.guess_handler.score,
+            "!stats": self.guess_handler.stats,
+            "!snerge": lambda _, prompt: self.send_quote(prompt),
+            "!snuwuge": lambda _, prompt: self.send_quote(prompt, force_owo=True),
+        }
 
         twitchio.client.logger = logger.getChild("client")
 
@@ -105,27 +116,13 @@ class Bot(Client):  # type: ignore
         if not (chatter.is_mod or chatter.is_broadcaster):
             return
 
-        if " " not in message.content:
-            return
-
-        command, _, content = message.content.parition(" ")
+        command, _, content = str(message.content).partition(" ")
         command = command.lower()
 
-        commands: dict[str, Callable[[Channel, str], Awaitable[None]]] = {
-            "!guesscommands": self.guess_handler.guess_commands,
-            "!startguessing": self.guess_handler.start_guessing,
-            "!stopguessing": self.guess_handler.stop_guessing,
-            "!score": self.guess_handler.score,
-            "!stats": self.guess_handler.stats,
-            "!snerge": lambda _, prompt: self.send_quote(prompt),
-            "!snuwuge": lambda _, prompt: self.send_quote(prompt, force_owo=True),
-        }
-
-        call = commands.get(command)
-
-        if not call:
+        if not (call := self.commands.get(command)):
             return
 
+        self.logger.info("Command %s from %s", command, chatter.display_name)
         await call(message.channel, content)
 
     async def queue_quote(self) -> None:
