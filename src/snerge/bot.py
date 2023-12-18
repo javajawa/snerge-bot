@@ -22,7 +22,7 @@ class Bot(Client):  # type: ignore
     quotes: ProseGen
     last_message: int
     _stop: bool = False
-    guess_handler : GuessHandler
+    guess_handler: GuessMessageHandler
 
     def __init__(  # pylint: disable=too-many-arguments
         self,
@@ -38,7 +38,11 @@ class Bot(Client):  # type: ignore
         self.logger = logger
         self.config = config
         self.quotes = quotes
-        self.guess_handler = guess_handler(self.config.use_latest_reply)
+        self.guess_handler = GuessMessageHandler(
+            self.config.use_latest_reply,
+            self.config.stopguess_delay,
+            self.config.closest_without_going_over,
+        )
 
     async def _start(self) -> None:
         self.logger.info("Starting up IRC bot")

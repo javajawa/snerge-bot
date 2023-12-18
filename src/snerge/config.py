@@ -17,7 +17,7 @@ class Config:
     chat_active_probe: Tuple[int, int]
     auto_quote_time: Tuple[int, int]
     quote_length: Tuple[int, int]
-    use_latest_reply : bool
+    use_latest_reply: bool
     stopguess_delay: int
     closest_without_going_over: bool
 
