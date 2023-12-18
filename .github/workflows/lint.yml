@@ -17,6 +17,7 @@ on:
 
 env:
   SOURCES: src
+  PYTHON_VERSION: 3.11
 
 jobs:
   reuse-lint:
@@ -24,10 +25,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
 
     - name: REUSE Compliance Check
-      uses: fsfe/reuse-action@v1.1
+      uses: fsfe/reuse-action@v2
 
   py-lint:
     name: Lint Python code
@@ -35,16 +36,16 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
 
-    - name: Setup Python 3.8
-      uses: actions/setup-python@v1
+    - name: Setup Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v5
       with:
-        python-version: 3.8
+        python-version: ${{ env.PYTHON_VERSION }}
 
-    - name: Load Depedency Cache
+    - name: Load Dependency Cache
       id: cache
-      uses: actions/cache@v2
+      uses: actions/cache@v3
       with:
         path: ~/.cache/pip
         key: ${{ runner.os }}-pip-${{ hashFiles('requirements*.txt') }}
@@ -63,16 +64,16 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
 
-    - name: Setup Python 3.8
-      uses: actions/setup-python@v1
+    - name: Setup Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v5
       with:
-        python-version: 3.8
+        python-version: ${{ env.PYTHON_VERSION }}
 
-    - name: Load Depedency Cache
+    - name: Load Dependency Cache
       id: cache
-      uses: actions/cache@v2
+      uses: actions/cache@v3
       with:
         path: ~/.cache/pip
         key: ${{ runner.os }}-pip-${{ hashFiles('requirements*.txt') }}
@@ -83,7 +84,7 @@ jobs:
 
     - name: Run Linters
       if: github.event_name != 'release'
-      uses: samuelmeuli/lint-action@v1
+      uses: samuelmeuli/lint-action@v2
       with:
         github_token: ${{ secrets.github_token }}
 
