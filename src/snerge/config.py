@@ -11,7 +11,7 @@ import dataclasses
 
 
 @dataclasses.dataclass
-class Config:
+class Config:  # pylint: disable=too-many-instance-attributes
     channel: str
     startup_probe: Tuple[int, int]
     chat_active_probe: Tuple[int, int]

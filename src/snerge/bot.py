@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+from typing import Awaitable, Callable
+
 import asyncio
 import random
 
@@ -77,7 +79,7 @@ class Bot(Client):  # type: ignore
 
     async def event_message(self, message: Message) -> None:
         # Ignore loop-back messages
-        if not message.author or message.author.name.lower() == self.nick.lower():
+        if message.echo:
             return
 
         # Note when chat last happened
@@ -87,25 +89,38 @@ class Bot(Client):  # type: ignore
         if not (target := self.get_channel(self.config.channel)):
             return
 
-        # Run the guess handler,
-        if await self.guess_handler.message_process(message, message.channel):
+        chatter = target.get_chatter(message.author.name)
+        if not isinstance(chatter, Chatter):
             return
+
+        # Run the guess handler,
+        await self.guess_handler.message_process(message, chatter)
 
         # Commands can only be processed by mods, when we can reply.
-        chatter = target.get_chatter(message.author.name)
-
-        if not isinstance(chatter, Chatter) or not message.author.is_mod:
+        if not (chatter.is_mod or chatter.is_broadcaster):
             return
 
-        # !snerge command: send a quote!
-        content = message.content.lower()
+        if " " not in message.content:
+            return
 
-        if content.startswith("!unoquote "):
-            self.logger.info(message.content)
+        command, _, content = message.content.parition(" ")
+        command = command.lower()
 
-        if content == "!snerge" or content.startswith("!snerge "):
-            self.logger.info("Manual Snerge by %s", message.author.name)
-            await self.send_quote(content.replace("!snerge", "").strip())
+        commands: dict[str, Callable[[Channel, str], Awaitable[None]]] = {
+            "guesscommands": self.guess_handler.guess_commands,
+            "startguessing": self.guess_handler.start_guessing,
+            "stopguessing": self.guess_handler.stop_guessing,
+            "score": self.guess_handler.score,
+            "stats": self.guess_handler.stats,
+            "snerge": lambda _, prompt: self.send_quote(prompt),
+        }
+
+        call = commands.get(command)
+
+        if not call:
+            return
+
+        await call(message.channel, content)
 
     async def queue_quote(self) -> None:
         await self.connect()

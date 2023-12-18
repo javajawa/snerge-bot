@@ -29,34 +29,17 @@ class GuessStore:
     ) -> tuple[list[str], set[int]]:
         # Find the score value to use as a result
         raw_values = list(self.guesses.values())
-        raw_values.sort()
 
         if closest_without_going_over:
-            # Which value is the closest value that isn't over
-            # Note, raw_values are sorted; let's find the value before that
-            result_value = raw_values[0]
-            last_i = raw_values[0]
-            for i in raw_values[1:]:
-                if value < i:
-                    result_value = last_i
-                    break
-                last_i = i
-            result_values = {result_value}
+            winning_values = {max(val for val in raw_values if val <= value)}
         else:
-            diffs = [abs(i - value) for i in raw_values]
-            min_diff = min(diffs)
-            result_values_temp = []
-            for i_indx in range(len(diffs)):
-                if diffs[i_indx] == min_diff:
-                    result_values_temp.append(raw_values[i_indx])
-            result_values = set(result_values_temp)
+            diffs = [(i, abs(i - value)) for i in raw_values]
+            min_diff = min(diff[1] for diff in diffs)
+            winning_values = {diff[0] for diff in diffs if diff[1] == min_diff}
 
-        result_names = []
-        for i_name in self.guesses:
-            if self.guesses[i_name] in result_values:
-                result_names.append(i_name)
+        winners = [name for name, guess in self.guesses.items() if guess in winning_values]
 
-        return result_names, result_values
+        return winners, winning_values
 
     def num_replies(self) -> int:
         return len(self.guesses)

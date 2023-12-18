@@ -9,7 +9,7 @@ import asyncio
 import re
 from enum import Enum
 
-from twitchio import Message, Chatter, Channel  # typing: ignore
+from twitchio import Message, Chatter, Channel  # type: ignore
 
 from .guessstore import GuessStore
 
@@ -41,37 +41,18 @@ class GuessMessageHandler:
         self.bot_state = GuessHandlerBotState.NOT_PROCESSING
         self.reset_guesses()
 
-    async def message_process(self, message: Message, channel: Channel) -> bool:
-        # Only do full message check if in recording mode
-        if self.bot_state == GuessHandlerBotState.COLLECTING_VALS:
-            if self.is_guess(message.content):
-                await self.record_guess(message.author.name, message.content, channel)
-                return True
-            if message.content.lower().startswith("!guess "):
-                await self.record_guess(
-                    message.author.name, message.content[len("!guess ") :], channel
-                )
-                return True
+    async def message_process(self, message: Message, chatter: Chatter) -> None:
+        if self.bot_state != GuessHandlerBotState.COLLECTING_VALS:
+            return
 
-        if self.is_elevated_permissions(message.author):
-            content = message.content
-            if content == "!startguessing" or content.startswith("!startguessing "):
-                await self.startguessing(channel)
-                return True
-            if content == "!stopguessing" or content.startswith("!stopguessing "):
-                await self.stopguessing(channel)
-                return True
-            if content == "!score" or content.startswith("!score "):
-                await self.score(channel, content[len("!score ") :])
-                return True
-            if content == "!stats" or content.startswith("!stats "):
-                await self.stats(channel)
-                return True
-            if content == "!guesscommands" or content.startswith("!guesscommands "):
-                await self.guesscommands(channel)
-                return True
+        if self.is_guess(message.content):
+            return await self.record_guess(chatter, message.content, message.channel)
 
-        return False
+        command, _, content = message.content.parition(" ")
+        command = command.lower()
+
+        if command == "!guess":
+            await self.record_guess(chatter, content, message.channel)
 
     def is_guess(self, message: str) -> bool:
         # Is this a number?
@@ -80,121 +61,95 @@ class GuessMessageHandler:
     def reset_guesses(self) -> None:
         self.guesses = GuessStore(self.use_latest_reply)
 
-    def is_elevated_permissions(self, author: Chatter) -> bool:
-        return author.is_mod or author.is_broadcaster
-
-    async def record_guess(
-        self,
-        name: str,
-        message: str,
-        channel: Channel,
-        ping_name: str | None = None,
-    ) -> None:
+    async def record_guess(self, name: Chatter, message: str, channel: Channel) -> None:
         """
         Check the value from "message" is a positive integer; report back if not.
         Two checks: Integer, and Positive
         Then hand over to guess handler.
         """
-        if ping_name is None:
-            ping_name = name
+
+        if not (match := self.regexp_pattern.match(message)):
+            await channel.send(f"{name.mention} Positive whole numbers only please")
+            return
 
         try:
-            value_int = int(self.regexp_pattern.match(message)[0])
+            value_int = int(match[0])
         except ValueError:
-            # self.logger.info(
-            # f"Input message returned ValueError -  ({name}:{message}) - not an integer"
-            # )
-            await channel.send(f"@{ping_name} Positive whole numbers only please")
-            return None
-        except Exception:
-            # self.logger.error(
-            # f"Alternative error when handling message in record_guess ({name}:{message})"
-            # )
-            return None
+            await channel.send(f"{name.mention} Positive whole numbers only please")
+            return
 
         if value_int < 0:
-            # self.logger.info("value_int error ({value}")
-            # self.logger.error(
-            # "Converting value to Input message is negative ({name}:{message})"
-            # )
-            await channel.send(f"@{ping_name} Positive whole numbers only please")
-            return None
+            await channel.send(f"{name.mention} Positive whole numbers only please")
+            return
 
         # Feed to guess handler
-        # self.logger.info(f"Recording guess {value_int} from {name}")
-        self.guesses.accept_guess(name, value_int)
-        return None
+        self.guesses.accept_guess(name.display_name, value_int)
 
     # Commands
-    async def startguessing(self, channel: Channel) -> None:
+    async def start_guessing(self, channel: Channel, _: str) -> None:
         if self.bot_state == GuessHandlerBotState.NOT_PROCESSING:
             self.reset_guesses()
             self.bot_state = GuessHandlerBotState.COLLECTING_VALS
             await channel.send("Give guesses now! Positive integers only!")
         elif self.bot_state == GuessHandlerBotState.HOLDING_FOR_ANSWER:
             await channel.send("Still waiting to give an answer!")
-        else:
-            # self.logger.warning("Tried to start guessing, but not in the correct state")
-            pass
 
-    async def stopguessing(self, channel: Channel) -> None:
-        if self.bot_state == GuessHandlerBotState.COLLECTING_VALS:
-            # self.logger.info(
-            #    f"Asked to stop guessing. Going to delay by {self.config.stopguess_delay} seconds"
-            # )
-            await channel.send("Guessing window closed")
-            await asyncio.sleep(self.stopguess_delay)
-            # self.logger.info(f"Guessing window closed")
-            self.bot_state = GuessHandlerBotState.HOLDING_FOR_ANSWER
-            await self.stats(channel)
-        else:
-            # self.logger.warning("Tried to stop guessing, but not in the correct state")
-            pass
+    async def stop_guessing(self, channel: Channel, _: str) -> None:
+        if self.bot_state != GuessHandlerBotState.COLLECTING_VALS:
+            return
+
+        await channel.send("Guessing window closed")
+        await asyncio.sleep(self.stopguess_delay)
+        self.bot_state = GuessHandlerBotState.HOLDING_FOR_ANSWER
+        await self.stats(channel, _)
 
     async def score(self, channel: Channel, scoreval: str) -> None:
-        if self.bot_state == GuessHandlerBotState.COLLECTING_VALS:
-            # self.logger.warning("Asked to make score, but still collecting.")
+        if self.bot_state != GuessHandlerBotState.HOLDING_FOR_ANSWER:
             await channel.send("Please call !stopguessing before asking for a score")
+            return
+
+        # Convert
+        try:
+            match = self.regexp_pattern.match(scoreval)
+            if not match:
+                return
+            scoreval_int = int(match[0])
+        except ValueError:
+            # Supress Error
+            return
+
+        # Produce score in either case
+        (result_names, result_values) = self.guesses.get_score(
+            scoreval_int, self.closest_without_going_over
+        )
+
+        if self.closest_without_going_over:
+            pre_msg = "Winners without going over: "
         else:
-            # Convert
-            try:
-                scoreval_int = int(self.regexp_pattern.match(scoreval)[0] or "")
-            except Exception:
-                # Supress Error
-                return None
+            pre_msg = "Winners: "
 
-            # Produce score in either case
-            (result_names, result_values) = self.guesses.get_score(
-                scoreval_int, self.closest_without_going_over
-            )
+        # Answer given, reset state.
+        self.bot_state = GuessHandlerBotState.NOT_PROCESSING
 
-            if self.closest_without_going_over:
-                pre_msg = "Winners without going over: "
-            else:
-                pre_msg = "Winners: "
+        message = (
+            pre_msg
+            + ", ".join(result_names)
+            + ". Guesses of: "
+            + ", ".join(map(str, result_values))
+        )
+        await channel.send(message)
 
-            # Answer given, reset state.
-            self.bot_state = GuessHandlerBotState.NOT_PROCESSING
-
-            message = (
-                pre_msg
-                + ", ".join(result_names)
-                + ". Guesses of: "
-                + str(result_values)[1:-1]
-            )
-            await channel.send(message)
-
-    async def stats(self, channel: Channel) -> None:
+    async def stats(self, channel: Channel, _: str) -> None:
         stats = self.guesses.stats()
         message = (
             f"{stats['count']} results between {stats['min']}-{stats['max']}."
             f"Mean:{stats['mean']}, StDev:{stats['stdev']:.1f}. Median:{stats['median']}"
         )
 
-        # self.logger.info(f"Stats Message:{message}")
         await channel.send(message)
 
-    async def guesscommands(self, channel: Channel) -> None:
+    @staticmethod
+    async def guess_commands(channel: Channel, _: str) -> None:
         prefix = "!"
         await channel.send(
             f"{prefix}startguessing, {prefix}stopguessing, {prefix}score (result), {prefix}stats."
