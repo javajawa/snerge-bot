@@ -87,6 +87,10 @@ class Bot(Client):  # type: ignore
         if not (target := self.get_channel(self.config.channel)):
             return
 
+        # Run the guess handler,
+        if await self.guess_handler.message_process(message, message.channel):
+            return
+
         # Commands can only be processed by mods, when we can reply.
         chatter = target.get_chatter(message.author.name)
 

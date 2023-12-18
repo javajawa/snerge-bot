@@ -1,3 +1,8 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2023 Kitsune
+#
+# SPDX-License-Identifier: BSD-2-Clause
+
 from __future__ import annotations
 
 import asyncio
@@ -42,7 +47,7 @@ class GuessMessageHandler:
             if self.is_guess(message.content):
                 await self.record_guess(message.author.name, message.content, channel)
                 return True
-            elif message.content.lower().startswith("!guess "):
+            if message.content.lower().startswith("!guess "):
                 await self.record_guess(
                     message.author.name, message.content[len("!guess ") :], channel
                 )
@@ -53,16 +58,16 @@ class GuessMessageHandler:
             if content == "!startguessing" or content.startswith("!startguessing "):
                 await self.startguessing(channel)
                 return True
-            elif content == "!stopguessing" or content.startswith("!stopguessing "):
+            if content == "!stopguessing" or content.startswith("!stopguessing "):
                 await self.stopguessing(channel)
                 return True
-            elif content == "!score" or content.startswith("!score "):
+            if content == "!score" or content.startswith("!score "):
                 await self.score(channel, content[len("!score ") :])
                 return True
-            elif content == "!stats" or content.startswith("!stats "):
+            if content == "!stats" or content.startswith("!stats "):
                 await self.stats(channel)
                 return True
-            elif content == "!guesscommands" or content.startswith("!guesscommands "):
+            if content == "!guesscommands" or content.startswith("!guesscommands "):
                 await self.guesscommands(channel)
                 return True
 
@@ -126,6 +131,8 @@ class GuessMessageHandler:
             self.reset_guesses()
             self.bot_state = GuessHandlerBotState.COLLECTING_VALS
             await channel.send("Give guesses now! Positive integers only!")
+        elif self.bot_state == GuessHandlerBotState.HOLDING_FOR_ANSWER:
+            await channel.send("Still waiting to give an answer!")
         else:
             # self.logger.warning("Tried to start guessing, but not in the correct state")
             pass
@@ -165,6 +172,9 @@ class GuessMessageHandler:
                 pre_msg = "Winners without going over: "
             else:
                 pre_msg = "Winners: "
+
+            # Answer given, reset state.
+            self.bot_state = GuessHandlerBotState.NOT_PROCESSING
 
             message = (
                 pre_msg

@@ -1,3 +1,9 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2023 Kitsune
+#
+# SPDX-License-Identifier: BSD-2-Clause
+
+
 from __future__ import annotations
 
 import statistics
