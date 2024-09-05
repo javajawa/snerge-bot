@@ -51,7 +51,8 @@ def main() -> None:
 
     # Create the HTTP daemon and attack the handlers.
     site_setup = runner.create_onetime_task(
-        "setup-httpd", create_httpd(app, data, event_subscription_handler.handle_webhook)
+        "setup-httpd",
+        create_httpd(app, data, event_subscription_handler.handle_webhook),
     )
 
     # Run the setup tasks until they are complete.

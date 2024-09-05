@@ -5,54 +5,44 @@
 
 from __future__ import annotations
 
-from typing import AsyncGenerator, List, Tuple
-
 import asyncio
 import csv
-import json
 import re
 
 import aiohttp
 
-from aiostream import stream
 from bs4 import BeautifulSoup, NavigableString, Tag
 
 from prosegen import ProseGen
 from snerge import log
-from snerge.util import SetEncoder
-
-
-StringGen = AsyncGenerator[Tuple[str, str], None]
 
 
 async def load_data(logger: log.Logger, instance: ProseGen) -> ProseGen:
-    combined = stream.merge(
-        load_sergisms(logger), load_uno_quotes(logger), load_lrr_quotes(logger)
+    await asyncio.gather(
+        load_sergisms(logger, instance),
+        load_uno_quotes(logger, instance, "quotes.csv"),
+        load_lrr_quotes(logger, instance),
     )
-
-    async with combined.stream() as streamer:
-        async for quote_id, quote in streamer:
-            instance.add_knowledge(quote, source=quote_id)
-
     return instance
 
 
-async def load_uno_quotes(logger: log.Logger) -> StringGen:
+async def load_uno_quotes(logger: log.Logger, instance: ProseGen, file: str) -> None:
     logger.info("Loading quotes from Uno-db")
     line: dict[str, str]
     count = 0
 
-    with open("quotes.csv", "r", encoding="utf-8") as quotes:
+    with open(file, "r", encoding="utf-8") as quotes:
         reader = csv.DictReader(quotes)
 
         for line in reader:
+            print(line)
             count += 1
-            yield f"Uno #{line['id']}", line["quote"].strip('"')
+            instance.add_knowledge(line["quote"].strip('"'), f"Uno #{line['id']}")
 
     logger.info("Added %d Uno quotes", count)
 
 
-async def load_sergisms(logger: log.Logger) -> StringGen:
+async def load_sergisms(logger: log.Logger, instance: ProseGen) -> None:
     logger.info("Loading quotes from Sergisms")
     line: dict[str, str]
     count = 0
@@ -62,14 +52,13 @@ async def load_sergisms(logger: log.Logger) -> StringGen:
 
         for line in reader:
             count += 1
-            yield f"Sergisms #{line['id']}", line["quote"].strip('"')
+            instance.add_knowledge(line["quote"].strip('"'), f"Sergisms #{line['id']}")
 
     logger.info("Added %d Sergisms", count)
 
 
-async def load_lrr_quotes(logger: log.Logger) -> StringGen:
+async def load_lrr_quotes(logger: log.Logger, instance: ProseGen) -> None:
     exclude = []
-    count = 0
 
     with open("moderate.txt", "rt", encoding="utf-8") as handle:
         for line in handle:
@@ -80,20 +69,20 @@ async def load_lrr_quotes(logger: log.Logger) -> StringGen:
     logger.info("Added %d quotes to the LRR exclude list", len(exclude))
 
     async with aiohttp.ClientSession() as session:
-        combined = stream.merge(
-            *[load_lrr_quote_page(logger, session, page, exclude) for page in range(1, 18)]
+        calls = (
+            load_lrr_quote_page(logger, session, instance, page, exclude)
+            for page in range(1, 18)
         )
-        async with combined.stream() as streamer:
-            async for quote_id, quote in streamer:
-                count += 1
-                yield f"LRR {quote_id}", quote
-
-    logger.info("Added %d LRR quotes", count)
+        await asyncio.gather(*calls)
 
 
 async def load_lrr_quote_page(
-    logger: log.Logger, session: aiohttp.ClientSession, page: int, exclude: List[str]
-) -> StringGen:
+    logger: log.Logger,
+    session: aiohttp.ClientSession,
+    instance: ProseGen,
+    page: int,
+    exclude: list[str],
+) -> None:
     logger.info("Loading LRR quote page %d", page)
     html = await session.get(
         f"https://lrrbot.com/quotes/search?q=serge&mode=name&page={page}"
@@ -101,6 +90,7 @@ async def load_lrr_quote_page(
     soup = BeautifulSoup(await html.text(), "html.parser")
 
     quotes = soup.find("ol", class_="quotes")
+    count = 0
 
     if not quotes or not isinstance(quotes, Tag):
         return
@@ -120,7 +110,10 @@ async def load_lrr_quote_page(
         attrib_text = attrib_text.strip("—").strip()
 
         if attrib_text == "Serge" or attrib_text.startswith("Serge, "):
-            yield quote_id, quote_text
+            count += 1
+            instance.add_knowledge(quote_text, f"LRR {quote_id}")
+
+    logger.info("Added %d LRR quotes from page %d", count, page)
 
 
 async def download_new_quote_list(session: aiohttp.ClientSession) -> None:
@@ -180,22 +173,3 @@ def clean_quote(quote: str) -> str | None:
         return leader.group(1) if len(leader.group(1)) > 24 else None
 
     return quote
-
-
-async def main() -> None:
-    log.init()
-    logger = log.get_logger()
-
-    with open("loaded_lrr_quotes.txt", "wt", encoding="utf-8") as handle:
-        async for quote_id, quote in load_lrr_quotes(logger):
-            handle.write(f"{quote_id}, {quote}\n")
-
-    dataset = ProseGen(20)
-    await load_data(logger, dataset)
-
-    with open("parsed_state.json", "wt", encoding="utf-8") as handle:
-        json.dump(dataset.dictionary, handle, cls=SetEncoder, indent=2)
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
