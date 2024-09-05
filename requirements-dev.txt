@@ -14,5 +14,4 @@ reuse
 types-requests
 types-beautifulsoup4
 
-twine
-wheel
+epicstore_api
