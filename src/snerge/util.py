@@ -19,6 +19,6 @@ class SetEncoder(json.JSONEncoder):
             return list(o)
         if isinstance(o, prosegen.prosegen.Fact):
             return {"id": o.source, "text": o.original}
-        if dataclasses.is_dataclass(o):
+        if dataclasses.is_dataclass(o) and not isinstance(o, type):
             return dataclasses.asdict(o)
         return json.JSONEncoder.default(self, o)

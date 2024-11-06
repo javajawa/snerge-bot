@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2024 Benedict Harcourt <ben.harcourt@harcourtprogramming.co.uk>
+#
+# SPDX-License-Identifier: BSD-2-Clause
+
 import asyncio
 import dataclasses
 import functools
@@ -8,11 +12,11 @@ import typing
 import urllib.parse
 
 import aiohttp
-import epicstore_api
+import epicstore_api  # type: ignore[import-untyped]
 
 
 @dataclasses.dataclass
-class GameInfo:
+class GameInfo:  # pylint: disable=too-many-instance-attributes
     name: str
     source: str
     description: str
@@ -51,7 +55,7 @@ class GameList:
 
     @property
     def prices(self) -> dict[str, tuple[float, str]]:
-        ret = {}
+        ret: dict[str, tuple[float, str]] = {}
 
         for game in self.games:
             for currency, price in game.prices.items():
@@ -72,12 +76,12 @@ class Foo:
     def __init__(self, path: str) -> None:
         self.file = pathlib.Path(path)
 
-    async def main(self):
+    async def main(self) -> None:
         self.session = aiohttp.ClientSession()
         self.epic_api = epicstore_api.EpicGamesStoreAPI()
 
         try:
-            with open("./games.md", "w") as out:
+            with open("./games.md", "w", encoding="utf-8") as out:
                 with self.file.open("r", encoding="utf-8") as source:
                     for line in source.readlines():
                         if not line.strip():
@@ -98,6 +102,9 @@ class Foo:
             await self.session.close()
 
     async def steam_game(self, name: str) -> GameInfo | None:
+        if not self.session:
+            return None
+
         if not self.steam:
             response = await self.session.get(
                 "https://api.steampowered.com/ISteamApps/GetAppList/v0002/?format=json"
@@ -116,30 +123,45 @@ class Foo:
         json = await response.json()
         game = json[str(self.steam[name])]["data"]
 
+        slug = game["name"].replace(" ", "_")
+
         return GameInfo(
             source="Steam",
             name=game["name"],
             description=game["short_description"],
             website=game["website"],
-            purchase=f"https://store.steampowered.com/app/{game['steam_appid']}/{game['name'].replace(' ', '_')}",
+            purchase=f"https://store.steampowered.com/app/{game['steam_appid']}/{slug}",
             tags=[x["description"].title() for x in game.get("genres", [])],
             platforms=[x for x in game["platforms"] if game["platforms"][x]],
-            prices={game["price_overview"]["currency"]: game["price_overview"]["final"] / 100}
-            if "price_overview" in game
-            else {},
+            prices=(
+                {game["price_overview"]["currency"]: game["price_overview"]["final"] / 100}
+                if "price_overview" in game
+                else {}
+            ),
         )
 
     async def humble(self, name: str) -> GameInfo | None:
+        if not self.session:
+            return None
+
         response = await self.session.post(
-            "https://ayszewdaz2-dsn.algolia.net/1/indexes/replica_product_query_site_search/query?x-algolia-agent=Algolia%20for%20vanilla%20JavaScript%203.24.5&x-algolia-application-id=AYSZEWDAZ2&x-algolia-api-key=5229f8b3dec4b8ad265ad17ead42cb7f",
-            data=f'{{"params":"query={urllib.parse.quote(name)}&filters=NOT%20disallowed_countries%3A%22GB%22%20AND%20(exclusive_countries%3A%22n%2Fa%22%20OR%20exclusive_countries%3A%22GB%22)%20AND%20start_dt%20%3C%3D%201682890992%20AND%20end_dt%20%3E%201682890992&hitsPerPage=5&page=0"}}',
+            (
+                "https://ayszewdaz2-dsn.algolia.net/1/indexes/replica_product_query_site_search"
+                "/query?x-algolia-agent=Algolia%20for%20vanilla%20JavaScript%203.24.5"
+                "&x-algolia-application-id=AYSZEWDAZ2"
+                "&x-algolia-api-key=5229f8b3dec4b8ad265ad17ead42cb7f"
+            ),
+            data=(
+                f'{{"params":"query={urllib.parse.quote(name)}&filters=NOT%20disallowed_countries'
+                "%3A%22GB%22%20AND%20(exclusive_countries%3A%22n%2Fa%22%20OR%20exclusive_countries"
+                "%3A%22GB%22)%20AND%20start_dt%20%3C%3D%201682890992%20AND%20end_dt%20%3E"
+                '%201682890992&hitsPerPage=5&page=0"}'
+            ),
         )
         data = await response.json()
         humble = next((game for game in data["hits"] if name == game["human_name"]), None)
 
         if not humble:
-            # if data["hits"]:
-            #     print(name, "not found in humble, candidates", *[game["human_name"] for game in data["hits"]])
             return None
 
         return GameInfo(
@@ -158,6 +180,9 @@ class Foo:
         )
 
     async def epic(self, name: str) -> GameInfo | None:
+        if not self.epic_api:
+            return None
+
         games = await asyncio.get_running_loop().run_in_executor(
             None, functools.partial(self.epic_api.fetch_store_games, keywords=name)
         )
@@ -202,8 +227,6 @@ class Foo:
                     / 100
                 },
             )
-
-        # print(name, "not found in epic, candidates", *[game["title"] for game in games.get("data", {}).get("Catalog", {}).get("searchStore", {}).get("elements", [])])
 
         return None
 

@@ -30,7 +30,7 @@ class Bot(Client):  # type: ignore
     last_message: int = 0
     _stop: bool = False
 
-    def __init__(  # pylint: disable=too-many-arguments
+    def __init__(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         logger: log.Logger,
         loop: asyncio.AbstractEventLoop,
