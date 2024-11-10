@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import asyncio
 import csv
-import json
 import re
 
 import aiohttp
@@ -105,7 +104,9 @@ async def load_lrr_quote_page(
 
         attrib = quote.find("div", class_="attrib")
         attrib_text = " ".join(
-            " ".join(element.text.lstrip("—").strip().split()) for element in attrib if isinstance(element, NavigableString)
+            " ".join(element.text.lstrip("—").strip().split())
+            for element in attrib
+            if isinstance(element, NavigableString)
         ).strip()
 
         if attrib_text == "Serge" or attrib_text.startswith("Serge, "):
