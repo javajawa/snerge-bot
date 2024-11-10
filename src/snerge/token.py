@@ -90,7 +90,7 @@ def refresh_app_token() -> App:
             "client_id": app.client_id,
             "client_secret": app.client_secret,
             "grant_type": "client_credentials",
-            "scope": "channel:read:redemptions",
+            "scope": "channel:read:redemptions user:read:chat user:write:chat user:bot",
         },
         timeout=15,
     )

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import csv
+import json
 import re
 
 import aiohttp
@@ -35,7 +36,6 @@ async def load_uno_quotes(logger: log.Logger, instance: ProseGen, file: str) -> 
         reader = csv.DictReader(quotes)
 
         for line in reader:
-            print(line)
             count += 1
             instance.add_knowledge(line["quote"].strip('"'), f"Uno #{line['id']}")
 
@@ -57,7 +57,7 @@ async def load_sergisms(logger: log.Logger, instance: ProseGen) -> None:
     logger.info("Added %d Sergisms", count)
 
 
-async def load_lrr_quotes(logger: log.Logger, instance: ProseGen) -> None:
+async def load_lrr_quotes(logger: log.Logger, instance: ProseGen | None) -> None:
     exclude = []
 
     with open("moderate.txt", "rt", encoding="utf-8") as handle:
@@ -79,7 +79,7 @@ async def load_lrr_quotes(logger: log.Logger, instance: ProseGen) -> None:
 async def load_lrr_quote_page(
     logger: log.Logger,
     session: aiohttp.ClientSession,
-    instance: ProseGen,
+    instance: ProseGen | None,
     page: int,
     exclude: list[str],
 ) -> None:
@@ -101,17 +101,19 @@ async def load_lrr_quote_page(
         if quote_id in exclude:
             continue
 
-        quote_text = quote.find("blockquote").text
+        quote_text = str(quote.find("blockquote").text).strip()
 
         attrib = quote.find("div", class_="attrib")
-        attrib_text = "".join(
-            element for element in attrib if isinstance(element, NavigableString)
-        )
-        attrib_text = attrib_text.strip("—").strip()
+        attrib_text = " ".join(
+            " ".join(element.text.lstrip("—").strip().split()) for element in attrib if isinstance(element, NavigableString)
+        ).strip()
 
         if attrib_text == "Serge" or attrib_text.startswith("Serge, "):
             count += 1
-            instance.add_knowledge(quote_text, f"LRR {quote_id}")
+            if instance:
+                instance.add_knowledge(quote_text, f"LRR {quote_id}")
+            else:
+                print(quote_id, " | ", attrib_text, " | ", quote_text)
 
     logger.info("Added %d LRR quotes from page %d", count, page)
 
@@ -173,3 +175,7 @@ def clean_quote(quote: str) -> str | None:
         return leader.group(1) if len(leader.group(1)) > 24 else None
 
     return quote
+
+
+if __name__ == "__main__":
+    asyncio.run(load_lrr_quotes(logger=log.Logger(__name__), instance=None))

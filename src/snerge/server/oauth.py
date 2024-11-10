@@ -53,7 +53,7 @@ class OAuthHandler:
             "?response_type=code"
             f"&client_id={self.app.client_id}"
             f"&redirect_uri={self.app.redirect_url}"
-            "&scope=channel:read:redemptions"
+            "&scope=channel:read:redemptions"  # user:read:chat user:write:chat user:bot"
             f"&state={state}"
         )
 
