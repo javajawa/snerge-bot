@@ -97,13 +97,13 @@ class Fact:
         data = self.original.lower().strip()
 
         data = TEXT_EN_DASH.sub(r"\1 [!EN_DASH] ", data)
+        data = BRACKETS_ROUND.sub(r" [!OPEN_BRACKETS] \1 [!CLOSE_BRACKETS] ", data)
+        data = BRACKETS_SQUARE.sub(r" [!OPEN_BRACKETS] \1 [!CLOSE_BRACKETS] ", data)
         data = ELLIPSIS_WITH_PUNCTUATION.sub(r" [!ELLIPSIS] \1 ", data)
         data = ELLIPSIS.sub(r" [!ELLIPSIS] ", data)
         data = GENERAL_PUNCTUATION.sub(self._punctuation_token, data)
 
         data = EMPHASIS.sub(r" [!OPEN_EMPHASIS] \1 [!CLOSE_EMPHASIS] ", data)
-        data = BRACKETS_ROUND.sub(r" [!OPEN_BRACKETS] \1 [!CLOSE_BRACKETS] ", data)
-        data = BRACKETS_SQUARE.sub(r" [!OPEN_BRACKETS] \1 [!CLOSE_BRACKETS] ", data)
         data = DOUBLE_QUOTE1.sub(r" [!OPEN_QUOTE] \1 [!CLOSE_QUOTE] ", data)
         data = DOUBLE_QUOTE2.sub(r" [!OPEN_QUOTE] \1 [!CLOSE_QUOTE] ", data)
         data = SINGLE_QUOTE1.sub(r" [!OPEN_QUOTE] \1 [!CLOSE_QUOTE] ", data)
