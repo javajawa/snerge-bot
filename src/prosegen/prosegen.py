@@ -168,13 +168,8 @@ class ProseGen:
             if word == "":
                 continue
 
-            add_ender = False
-
             self.add_word(buff, word, debug)
             buff.push(word)
-
-            if add_ender:
-                self.add_word(buff, "!END", debug)
 
     def add_word(self, buff: Buffer, word: str, debug: bool) -> None:
         last_hash = -1
