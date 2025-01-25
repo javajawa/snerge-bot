@@ -78,7 +78,7 @@ class QuoteDownloader:
         await task
 
     async def query(self) -> None:
-        for quote in range(2633, 2780):
+        for quote in range(2780, 2830):
             await asyncio.sleep(10)
             await self.send_message(f"!unosearch {quote}")
 
@@ -99,6 +99,8 @@ class QuoteDownloader:
         self.logger.info("Sent message %s: status=%d", message, response.status)
 
     async def register(self, session_id: str) -> None:
+        self.user_token.renew(self.app)
+
         response = await self.session.post(
             "https://api.twitch.tv/helix/eventsub/subscriptions",
             headers={
@@ -117,8 +119,10 @@ class QuoteDownloader:
             },
         )
 
-        self.logger.warning(response.status)
+        self.logger.warning("Subscription result %d", response.status)
         self.logger.warning(await response.json())
+        if response.status != 202:
+            raise RuntimeError
 
 
 if __name__ == "__main__":
