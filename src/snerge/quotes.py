@@ -7,11 +7,6 @@ from __future__ import annotations
 
 import asyncio
 import csv
-import re
-
-import aiohttp
-
-from bs4 import BeautifulSoup, NavigableString, Tag
 
 from prosegen import ProseGen
 from snerge import log
@@ -57,126 +52,15 @@ async def load_sergisms(logger: log.Logger, instance: ProseGen) -> None:
 
 
 async def load_lrr_quotes(logger: log.Logger, instance: ProseGen | None) -> None:
-    exclude = []
-
-    with open("moderate.txt", "rt", encoding="utf-8") as handle:
-        for line in handle:
-            line = line.strip()
-            _id, _ = line.split(" ", 1)
-            exclude.append(_id)
-
-    logger.info("Added %d quotes to the LRR exclude list", len(exclude))
-
-    async with aiohttp.ClientSession() as session:
-        calls = (
-            load_lrr_quote_page(logger, session, instance, page, exclude)
-            for page in range(1, 18)
-        )
-        await asyncio.gather(*calls)
-
-
-async def load_lrr_quote_page(
-    logger: log.Logger,
-    session: aiohttp.ClientSession,
-    instance: ProseGen | None,
-    page: int,
-    exclude: list[str],
-) -> None:
-    logger.info("Loading LRR quote page %d", page)
-    html = await session.get(
-        f"https://lrrbot.com/quotes/search?q=serge&mode=name&page={page}"
-    )
-    soup = BeautifulSoup(await html.text(), "html.parser")
-
-    quotes = soup.find("ol", class_="quotes")
+    logger.info("Loading quotes from LRR")
+    line: dict[str, str]
     count = 0
 
-    if not quotes or not isinstance(quotes, Tag):
-        return
+    with open("serge-lrr.csv", "r", encoding="utf-8") as quotes:
+        reader = csv.DictReader(quotes)
 
-    for quote in quotes.find_all("li"):
-        quote_id = quote.find(class_="num").text
-
-        if quote_id in exclude:
-            continue
-
-        quote_text = str(quote.find("blockquote").text).strip()
-
-        attrib = quote.find("div", class_="attrib")
-        attrib_text = " ".join(
-            " ".join(element.text.lstrip("—").strip().split())
-            for element in attrib
-            if isinstance(element, NavigableString)
-        ).strip()
-
-        if attrib_text == "Serge" or attrib_text.startswith("Serge, "):
-            count += 1
-            if instance:
-                instance.add_knowledge(quote_text, f"LRR {quote_id}")
-            else:
-                print(quote_id, " | ", attrib_text, " | ", quote_text)
-
-    logger.info("Added %d LRR quotes from page %d", count, page)
-
-
-async def download_new_quote_list(session: aiohttp.ClientSession) -> None:
-    response = await session.get(
-        "https://raw.githubusercontent.com/RebelliousUno/BrewCrewQuoteDB/main/quotes.csv"
-    )
-
-    data = (await response.text(encoding="utf-8")).split("\n")
-
-    line: dict[str, str]
-    reader = csv.DictReader(data[1:], next(csv.reader([data[0]])), escapechar=None)
-    matcher = re.compile(r'"\\s*-\\s*[^,]+,')
-
-    with open("quotes.csv", "w", encoding="utf-8") as quotes:
-        writer = csv.DictWriter(quotes, ["id", "date", "author", "quote"])
-        writer.writeheader()
         for line in reader:
-            if line["id"] == "'-1":
-                continue
+            count += 1
+            instance.add_knowledge(line["quote"].strip('"'), f"LRR #{line['id']}")
 
-            # Fix up double CSV-quoting by reparsing the fields.
-            line = {k: next(csv.reader([v], escapechar=None))[0] for k, v in line.items()}
-
-            author = line["author"].lower()
-
-            # ignore anything with multiple attributions.
-            if " and " in author or matcher.match(line["quote"]):
-                continue
-
-            # Ignore anything not from Serge (or feedback from Snerge)
-            if not author.startswith(("serge", "snerge")):
-                continue
-
-            # Ignore purely action lines
-            if '"' not in line["quote"]:
-                continue
-
-            # Sometimes people use fancy quotes
-            line["quote"] = line["quote"].replace("’", "'")
-            line["quote"] = clean_quote(line["quote"]) or ""
-
-            if line["quote"]:
-                writer.writerow(line)
-
-
-def clean_quote(quote: str) -> str | None:
-    leading_action = re.compile(r'^\\*[^*"]+\\* ("[^"]+")$')
-    trailing_action = re.compile(r'^("[^"]+") \\*[^*"]+\\*$')
-
-    trailer = trailing_action.match(quote)
-    leader = leading_action.match(quote)
-
-    if trailer:
-        return trailer.group(1) if len(trailer.group(1)) > 24 else None
-
-    if leader:
-        return leader.group(1) if len(leader.group(1)) > 24 else None
-
-    return quote
-
-
-if __name__ == "__main__":
-    asyncio.run(load_lrr_quotes(logger=log.Logger(__name__), instance=None))
+    logger.info("Added %d LRR quotes", count)

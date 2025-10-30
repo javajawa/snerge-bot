@@ -67,7 +67,7 @@ class QuoteDownloader:
 
                     data = msg.json()
 
-                    if data["payload"]["subscription"]["type"] != "channel.chat.message":
+                    if data["payload"].get("subscription", {}).get("type") != "channel.chat.message":
                         continue
                     if data["payload"]["event"]["chatter_user_id"] == self.user_token.user_id:
                         continue
@@ -78,7 +78,7 @@ class QuoteDownloader:
         await task
 
     async def query(self) -> None:
-        for quote in range(2780, 2830):
+        for quote in range(2850, 2934):
             await asyncio.sleep(10)
             await self.send_message(f"!unosearch {quote}")
 
