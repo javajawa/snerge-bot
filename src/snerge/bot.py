@@ -23,11 +23,16 @@ from prosegen import ProseGen, Fact, GeneratedQuote
 
 
 CONTRACTABLE = re.compile(" (old|just|of|[a-z]{3,6}ing)[^a-z]")
+CONTRACT_IS = re.compile(" ([a-z]+) is ")
 
 
 def contract(g: re.Match[str]) -> str:
     x = g.group(0)
     return x[:-2] + "'" + x[-1]
+
+
+def contract_is(g: re.Match[str]) -> str:
+    return f" {g.group(1)}'s "
 
 
 class Bot(Client):  # type: ignore
@@ -219,6 +224,8 @@ class Bot(Client):  # type: ignore
         # Add in the accent.
         if random.randint(0, 10) == 0:
             quote = CONTRACTABLE.sub(contract, quote)
+        if random.randint(0, 5) == 0:
+            quote = CONTRACT_IS.sub(contract_is, quote)
 
         # There is a 0.5% chance of Snerge going UwU!
         if force_owo or random.randint(0, 200) == 0:
