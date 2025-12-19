@@ -10,6 +10,7 @@ from typing import Awaitable, Callable
 import asyncio
 import os.path
 import random
+import re
 
 from twitchio import Client, Channel, Chatter, Message, User  # type: ignore
 import twitchio.client  # type: ignore
@@ -19,6 +20,14 @@ from snerge.config import Config
 from snerge.token import App
 from snerge.guessmessagehandler import GuessMessageHandler
 from prosegen import ProseGen, Fact, GeneratedQuote
+
+
+CONTRACTABLE = re.compile(" (old|just|of|[a-z]{3,6}ing)[^a-z]")
+
+
+def contract(g: re.Match[str]) -> str:
+    x = g.group(0)
+    return x[:-2] + "'" + x[-1]
 
 
 class Bot(Client):  # type: ignore
@@ -207,6 +216,10 @@ class Bot(Client):  # type: ignore
         await target.send(quote)
 
     def cuteify(self, quote: str, force_owo: bool) -> str:
+        # Add in the accent.
+        if random.randint(0, 10) == 0:
+            quote = CONTRACTABLE.sub(contract, quote)
+
         # There is a 0.5% chance of Snerge going UwU!
         if force_owo or random.randint(0, 200) == 0:
             return "~UωU~ " + owo_magic(quote) + " ~UωU~"

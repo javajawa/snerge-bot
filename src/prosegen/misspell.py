@@ -59,6 +59,7 @@ _MAP = {
     "ravynn": "Ravynn",
     "sarah": "Sarah",
     "suffix": "𝐒𝐔𝐅𝐅𝐈𝐗",
+    "suffix's": "𝐒𝐔𝐅𝐅𝐈𝐗'𝐒",
     "seri": "Serifina",
     "serifina": "Serifina",
     "tq": "TQ",
@@ -89,10 +90,8 @@ _MAP = {
     "awww": "aww",
     "chaaat": "chat",
     "mmm": "mmmmm",
-    "probaby": "probably",
     "thinkin'": "thinking",
     "talkin'": "talking",
-    "poopin": "pooping",
     # An old misspell list (maybe the Microsoft Word one?)
     "abandonned": "abandoned",
     "aberation": "aberration",
