@@ -113,7 +113,11 @@ class Bot(Client):  # type: ignore
         await self.guess_handler.message_process(message, chatter)
 
         # Commands can only be processed by mods, when we can reply.
-        if not (chatter.is_mod or chatter.is_broadcaster):
+        if not (
+            chatter.is_mod
+            or chatter.is_broadcaster
+            or message.author.name == "thirsty_kitteh"
+        ):
             return
 
         command, _, content = str(message.content).partition(" ")
