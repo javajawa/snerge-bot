@@ -79,6 +79,9 @@ PUNCTUATION: dict[str, Punctuation] = {
     ),
     "[!BIG_NUMBER]": Punctuation("69", True, True),
     "[!NUMBER]": Punctuation("off-by-one", True, True),
+    "[!JAMES]": Punctuation("Chicken Lord James", True, True, may_end_quote=True),
+    "[!ICREAM]": Punctuation("James Ice Cream", True, True, may_end_quote=True),
+    "[!PRESENT]": Punctuation("Jo brought me", True, True),
 }
 
 
@@ -112,6 +115,9 @@ class Fact:
         data = ELLIPSIS_WITH_PUNCTUATION.sub(r" [!ELLIPSIS] \1 ", data)
         data = ELLIPSIS.sub(r" [!ELLIPSIS] ", data)
         data = GENERAL_PUNCTUATION.sub(self._punctuation_token, data)
+        data = data.replace("chicken lord james", "[!JAMES]")
+        data = data.replace("james ice cream", "[!ICREAM]")
+        data = data.replace("jo brought me", "[!PRESENT]")
         data = SMALL_NUMBER.sub(r" [!NUMBER] ", data)
         data = BIG_NUMBER.sub(r" [!BIG_NUMBER] ", data)
         data = DO_NOT_WANT.sub(r" nooooo ", data)
