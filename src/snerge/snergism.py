@@ -18,8 +18,7 @@ from snerge.quotes import load_data
 async def main() -> None:
     log.init()
 
-    prosegen = ProseGen(20)
-    prosegen = await load_data(log.get_logger(), prosegen)
+    prosegen = load_data(log.get_logger(), ProseGen(20))
 
     # x = re.compile("^[a-z]+$")
     # for key in sorted(prosegen.dictionary.keys()):

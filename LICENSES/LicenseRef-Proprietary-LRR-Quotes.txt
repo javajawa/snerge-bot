@@ -1,0 +1,4 @@
+This data is sourced from https://lrrbot.com/quotes/.
+
+Reproduction of these quotes outside of the context of running and maintaining
+SnergeBot is not permitted.

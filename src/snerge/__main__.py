@@ -26,7 +26,8 @@ def main() -> None:
     # Load our configuration
     logger = log.get_logger()
     config = conf.config()
-    data = prosegen.ProseGen(20)
+    # Queue loading in the quotes database.
+    data = quotes.load_data(logger, prosegen.ProseGen(20))
 
     # Get, and refresh, the app token
     app = token.refresh_app_token()
@@ -39,9 +40,6 @@ def main() -> None:
         config=config,
         quotes=data,
     )
-
-    # Queue loading in the quotes database.
-    runner.create_onetime_task("quote-loader", quotes.load_data(logger, data))
 
     # Create the event subscription handle, and initialise of it.
     event_subscription_handler = server.EventHandler(log.get_logger("webhook"), app, irc_bot)

@@ -67,7 +67,10 @@ class QuoteDownloader:
 
                     data = msg.json()
 
-                    if data["payload"].get("subscription", {}).get("type") != "channel.chat.message":
+                    if (
+                        data["payload"].get("subscription", {}).get("type")
+                        != "channel.chat.message"
+                    ):
                         continue
                     if data["payload"]["event"]["chatter_user_id"] == self.user_token.user_id:
                         continue

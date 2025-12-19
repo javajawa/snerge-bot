@@ -261,9 +261,10 @@ async def main() -> None:
 
     log.init()
     logger = log.get_logger()
+    loop = asyncio.get_event_loop()
 
     app = token.refresh_app_token()
-    data = await quotes.load_data(logger, ProseGen(20))
+    data = await loop.run_in_executor(None, quotes.load_data, logger, ProseGen(20))
 
     # Create the IRC bot
     bot = Bot(

@@ -11,7 +11,12 @@ import sys
 try:
     from systemd.journal import JournalHandler  # type: ignore # pylint: disable=import-error
 except ImportError:
-    pass
+
+    def JournalHandler(  # pylint: disable=C0103
+        SYSLOG_IDENTIFIER: str,  # pylint: disable=W0613,C0103
+    ) -> logging.Handler:
+        return logging.StreamHandler()
+
 
 Logger = logging.Logger
 

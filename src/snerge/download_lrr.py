@@ -1,3 +1,8 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2024 Benedict Harcourt <ben.harcourt@harcourtprogramming.co.uk>
+#
+# SPDX-License-Identifier: BSD-2-Clause
+
 from __future__ import annotations
 
 import asyncio
@@ -30,10 +35,10 @@ async def download_lrr_quotes(logger: log.Logger) -> None:
             await asyncio.gather(*calls)
 
 
-async def load_lrr_quote_page(
+async def load_lrr_quote_page(  # pylint: disable=too-many-locals
     logger: log.Logger,
     session: aiohttp.ClientSession,
-    writer: csv.DictWriter,
+    writer: csv.DictWriter[str],
     page: int,
     exclude: list[str],
 ) -> None:
@@ -68,7 +73,9 @@ async def load_lrr_quote_page(
 
         if attrib_text == "Serge" or attrib_text.startswith("Serge, "):
             count += 1
-            writer.writerow({"id": quote_id, "date": date, "author": attrib_text, "quote": quote_text})
+            writer.writerow(
+                {"id": quote_id, "date": date, "author": attrib_text, "quote": quote_text}
+            )
 
     logger.info("Added %d LRR quotes from page %d", count, page)
 
