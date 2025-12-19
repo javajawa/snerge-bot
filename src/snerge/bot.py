@@ -200,14 +200,22 @@ class Bot(Client):  # type: ignore
             return
 
         quote = get_quote(self.quotes, *self.config.quote_length, prompt)
+        quote = self.cuteify(quote, force_owo)
 
         self.logger.info("Sending quote %s", quote)
 
+        await target.send(quote)
+
+    def cuteify(self, quote: str, force_owo: bool) -> str:
         # There is a 0.5% chance of Snerge going UwU!
         if force_owo or random.randint(0, 200) == 0:
-            await target.send("~UωU~ " + owo_magic(quote) + " ~UωU~")
-        else:
-            await target.send("sergeSnerge " + quote + " sergeSnerge")
+            return "~UωU~ " + owo_magic(quote) + " ~UωU~"
+
+        # Shorter quotes have a 2.5% chance for an Oh nyo~
+        if len(quote) < self.config.quote_length[1] - 20 and random.randint(0, 40) == 0:
+            quote = quote + "  ✧･ﾟ. Oh nyo~! :3 *･ﾟ✧"
+
+        return "sergeSnerge " + quote + " sergeSnerge"
 
     def request_stop(self) -> None:
         self._stop = True
