@@ -57,8 +57,8 @@ class QuoteDownloader:
                 await self.register(session_id)
                 task = self.loop.create_task(self.query())
 
-                msg: aiohttp.WSMessage
-                async for msg in socket:
+                while not task.result():
+                    msg: aiohttp.WSMessage = await socket.receive(timeout=5)
                     if msg.type != aiohttp.WSMsgType.TEXT:
                         self.logger.warning(
                             "Unexpected %s message type", msg.type, extra={"msg": msg}
@@ -81,7 +81,7 @@ class QuoteDownloader:
         await task
 
     async def query(self) -> None:
-        for quote in range(2850, 2934):
+        for quote in range(2968, 3000):
             await asyncio.sleep(10)
             await self.send_message(f"!unosearch {quote}")
 

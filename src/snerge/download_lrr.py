@@ -15,21 +15,11 @@ from snerge import log
 
 
 async def download_lrr_quotes(logger: log.Logger) -> None:
-    exclude = []
-
-    with open("moderate.txt", "rt", encoding="utf-8") as handle:
-        for line in handle:
-            line = line.strip()
-            _id, _ = line.split(" ", 1)
-            exclude.append(_id)
-
-    logger.info("Added %d quotes to the LRR exclude list", len(exclude))
-
     with open("serge-lrr.csv", "w", encoding="utf-8") as quotes:
         writer = csv.DictWriter(quotes, ("id", "date", "author", "quote"))
         async with aiohttp.ClientSession() as session:
             calls = (
-                load_lrr_quote_page(logger, session, writer, page, exclude)
+                load_lrr_quote_page(logger, session, writer, page, 9500)
                 for page in range(1, 19)
             )
             await asyncio.gather(*calls)
@@ -40,7 +30,7 @@ async def load_lrr_quote_page(  # pylint: disable=too-many-locals
     session: aiohttp.ClientSession,
     writer: csv.DictWriter[str],
     page: int,
-    exclude: list[str],
+    max_id: int,
 ) -> None:
     logger.info("Loading LRR quote page %d", page)
     html = await session.get(
@@ -57,8 +47,8 @@ async def load_lrr_quote_page(  # pylint: disable=too-many-locals
     for quote in quotes.find_all("li"):
         quote_id = quote.find(class_="num").text
 
-        if quote_id in exclude:
-            continue
+        if int(quote_id.strip(' #')) <= max_id:
+            return
 
         quote_text = str(quote.find("blockquote").text).strip()
 
