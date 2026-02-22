@@ -39,7 +39,7 @@ class Bot(Client):  # type: ignore
     config: Config
     quotes: ProseGen
     guess_handler: GuessMessageHandler
-    commands: dict[str, Callable[[Channel, str], Awaitable[None]]]
+    commands: dict[str, tuple[bool, Callable[[Channel, str], Awaitable[None]]]]
 
     last_message: int = 0
     _stop: bool = False
@@ -64,15 +64,15 @@ class Bot(Client):  # type: ignore
         )
 
         self.commands = {
-            "!guesscommands": self.guess_handler.guess_commands,
-            "!startguessing": self.guess_handler.start_guessing,
-            "!stopguessing": self.guess_handler.stop_guessing,
-            "!score": self.guess_handler.score,
-            "!stats": self.guess_handler.stats,
-            "!snerge": lambda _, prompt: self.send_quote(prompt),
-            "!snuwuge": lambda _, prompt: self.send_quote(prompt, force_owo=True),
-            "!subscribe": self.subscribe,
-            "!unsubscribe": self.subscribe,
+            "!guesscommands": (True, self.guess_handler.guess_commands),
+            "!startguessing": (True, self.guess_handler.start_guessing),
+            "!stopguessing": (True, self.guess_handler.stop_guessing),
+            "!score": (True, self.guess_handler.score),
+            "!stats": (True, self.guess_handler.stats),
+            "!snerge": (True, lambda _, prompt: self.send_quote(prompt)),
+            "!snuwuge": (True, lambda _, prompt: self.send_quote(prompt, force_owo=True)),
+            "!subscribe": (False, self.subscribe),
+            "!unsubscribe": (False, self.subscribe),
         }
 
         twitchio.client.logger = logger.getChild("client")
@@ -126,18 +126,19 @@ class Bot(Client):  # type: ignore
         # Run the guess handler,
         await self.guess_handler.message_process(message, chatter)
 
-        # Commands can only be processed by mods, when we can reply.
-        if not (
+        command, _, content = str(message.content).partition(" ")
+        command = command.lower()
+
+        if command not in self.commands:
+            return
+
+        need_mod, call = self.commands[command]
+
+        if need_mod and not (
             chatter.is_mod
             or chatter.is_broadcaster
             or message.author.name == "thirsty_kitteh"
         ):
-            return
-
-        command, _, content = str(message.content).partition(" ")
-        command = command.lower()
-
-        if not (call := self.commands.get(command)):
             return
 
         self.logger.info("Command %s from %s", command, chatter.display_name)
