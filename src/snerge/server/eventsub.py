@@ -17,7 +17,6 @@ from aiohttp.web import Request, Response
 
 from snerge import bot, log, token
 
-
 REQUIRED_HEADERS = [
     "Twitch-Eventsub-Message-Id",
     "Twitch-Eventsub-Message-Signature",

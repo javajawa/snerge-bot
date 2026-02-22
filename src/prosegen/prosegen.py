@@ -17,7 +17,6 @@ from prosegen import misspell
 
 from .buffer import Buffer
 
-
 DOUBLE_QUOTE1 = re.compile(r'(?:^| )"(\S+)"(?: |$)')
 DOUBLE_QUOTE2 = re.compile(r'(?:^| )"([^"]+)"(?: |$)')
 SINGLE_QUOTE1 = re.compile(r"(?:^| )'(\S+)'(?: |$)")

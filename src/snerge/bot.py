@@ -21,7 +21,6 @@ from snerge.token import App
 from snerge.guessmessagehandler import GuessMessageHandler
 from prosegen import ProseGen, Fact, GeneratedQuote
 
-
 CONTRACTABLE = re.compile(" (old|just|of|[a-z]{3,6}ing)[^a-z]")
 CONTRACT_IS = re.compile(" ([a-z]+) is ")
 

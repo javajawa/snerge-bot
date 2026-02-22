@@ -47,7 +47,7 @@ async def load_lrr_quote_page(  # pylint: disable=too-many-locals
     for quote in quotes.find_all("li"):
         quote_id = quote.find(class_="num").text
 
-        if int(quote_id.strip(' #')) <= max_id:
+        if int(quote_id.strip(" #")) <= max_id:
             return
 
         quote_text = str(quote.find("blockquote").text).strip()

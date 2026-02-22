@@ -9,7 +9,6 @@ import sys
 
 from prosegen import ProseGen
 
-
 instance = ProseGen(20)
 
 for count in range(1, len(sys.argv)):

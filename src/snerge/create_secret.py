@@ -9,7 +9,6 @@ import os
 
 from snerge import token
 
-
 if __name__ == "__main__":
     app = token.App(
         client_id=os.environ.get("CLIENT_ID", ""),

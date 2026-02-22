@@ -10,5 +10,4 @@ from .eventsub import EventHandler
 from .predict import PredictHandler
 from .whence import WhenceHandler
 
-
 __all__ = ["OAuthHandler", "EventHandler", "PredictHandler", "WhenceHandler"]

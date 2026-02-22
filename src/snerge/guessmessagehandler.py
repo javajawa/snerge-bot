@@ -119,7 +119,7 @@ class GuessMessageHandler:
             return
 
         # Produce score in either case
-        (result_names, result_values) = self.guesses.get_score(
+        result_names, result_values = self.guesses.get_score(
             scoreval_int, self.closest_without_going_over
         )
 
