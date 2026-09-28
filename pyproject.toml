@@ -2,31 +2,69 @@
 #
 # SPDX-License-Identifier: CC0-1.0
 
+[project]
+name = "snerge-bot"
+version = "0.0.1"
+
+requires-python = ">=3.13, <4"
+dependencies = [
+    "aiohttp~=3.13",
+    "python-json-logger~=4.1",
+    "yarl~=1.23",
+]
+
+[project.optional-dependencies]
+
+dev = ["bastet~=0.2", "types-beautifulsoup4"]
+download = ["beautifulsoup4~=4.14"]
+reviews = ["epicstore-api"]
+
+[tool.bastet]
+
+disable = ["test", "pylint", "flake8", "bandit"]
+
 [tool.black]
 
-line-length = 94
+line-length = 100
 
-[tool.pylint."MASTER"]
+[tool.ruff]
+line-length = 100
+target-version = "py313"
 
-persistent = "yes"
-unsafe-load-any-extension = "no"
+[tool.ruff.lint]
 
-jobs=4
+select = ["ALL", "TD"]
+ignore = [
+    "D200",  # Single line doc strings do not need to fit on a single line in code.
+    "D202",  # Allow a blank line after docstring.
+    "D203",  # Use Zero blank lines before docstring, as per D211.
+    "D212",  # Multi-line docstring summary should start at the second line.
 
-[tool.pylint."MESSAGES CONTROL"]
+    "D10",
 
-disable="missing-function-docstring,missing-class-docstring,missing-module-docstring"
+    "ASYNC230",  # I'm playing fast-and-loose with open() in aysnc.
+]
 
-[tool.coverage.run]
+[tool.ruff.lint.pydocstyle]
+convention = "google"
 
-branch=true
-relative_files=true
-source=["orm"]
+[tool.ruff.lint.isort]
 
-[tool.coverage.report]
+# Section ordering
+section-order = ["future", "typing", "standard-library", "third-party", "first-party", "local-folder"]
+sections = {"typing" = ["typing", "types", "typing_extensions", "collections.abc"]}
+required-imports  = ["from __future__ import annotations as _future_annotations"]
 
-fail_under=80.0
+[tool.isort]
+profile = "black"
+py_version = 313
 
-[tool.coverage.html]
+# Section ordering
+sections = ["FUTURE", "TYPING", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
+known_typing = ["typing", "types", "typing_extensions", "collections.abc"]
 
-show_contexts=true
+# Always have deferred annotation processing. We rename it so we can use 'annotations' as a name.
+add_imports = ["from __future__ import annotations as _future_annotations"]
+
+# 9 is black compatible, but does not look great
+multi_line_output = 3

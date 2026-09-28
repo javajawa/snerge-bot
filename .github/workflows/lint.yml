@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: CC0-1.0
 # vim: expandtab ts=2 nospell
 
-name: Lint + Build + Publish
+name: Linting
 
 on:
   push:
@@ -11,84 +11,35 @@ on:
       - mainline
       - updates
   pull_request:
-  release:
-    types:
-      - published
-
-env:
-  SOURCES: src
-  PYTHON_VERSION: 3.11
 
 jobs:
-  reuse-lint:
-    name: Check Reuse Compliance
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: REUSE Compliance Check
-      uses: fsfe/reuse-action@v2
-
-  py-lint:
+  bastet:
     name: Lint Python code
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
 
-    - name: Setup Python ${{ env.PYTHON_VERSION }}
-      uses: actions/setup-python@v5
+    - name: "Setup Python"
+      uses: actions/setup-python@v7
       with:
-        python-version: ${{ env.PYTHON_VERSION }}
+        python-version-file: "pyproject.toml"
 
-    - name: Load Dependency Cache
-      id: cache
-      uses: actions/cache@v3
+    - name: Install uv
+      uses: astral-sh/setup-uv@v10.2.0
       with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('requirements*.txt') }}
-        restore-keys: ${{ runner.os }}-pip-
+        enable-cache: true
 
-    - name: Install dependencies
-      run:  pip install -r requirements-dev.txt
+    - name: Install the project
+      run: uv sync --locked --all-extras --dev
 
-    - name: Run PyLint
-      run: pylint ${{ env.SOURCES }} | python .github/workflows/pylint_to_gh_action.py
+    - name: Run bastet
+      shell: bash
+      run: uv run bastet --skip format --reporter github
 
-
-  python-lint:
-    name: Lint Python code
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-
-    - name: Setup Python ${{ env.PYTHON_VERSION }}
-      uses: actions/setup-python@v5
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v7
       with:
-        python-version: ${{ env.PYTHON_VERSION }}
-
-    - name: Load Dependency Cache
-      id: cache
-      uses: actions/cache@v3
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('requirements*.txt') }}
-        restore-keys: ${{ runner.os }}-pip-
-
-    - name: Install dependencies
-      run:  pip install -r requirements-dev.txt
-
-    - name: Run Linters
-      if: github.event_name != 'release'
-      uses: samuelmeuli/lint-action@v2
-      with:
-        github_token: ${{ secrets.github_token }}
-
-        black:     true
-        flake8:    true
-        mypy:      true
-        mypy_args: --strict
+        name: bastet-review
+        path: reports

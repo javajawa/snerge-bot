@@ -12,7 +12,7 @@ import typing
 import urllib.parse
 
 import aiohttp
-import epicstore_api  # type: ignore[import-untyped]
+import epicstore_api  # type: ignore[import-not-found]
 
 
 @dataclasses.dataclass
