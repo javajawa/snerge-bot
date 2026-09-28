@@ -1,23 +1,29 @@
-#!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2024 Benedict Harcourt <ben.harcourt@harcourtprogramming.co.uk>
 #
 # SPDX-License-Identifier: BSD-2-Clause
 
-from __future__ import annotations
+from __future__ import annotations as _future_annotations
+
+from typing import TYPE_CHECKING
 
 import asyncio
-import logging
+import http
+import pathlib
 
 import aiohttp.client
+
 from snerge import log, token
+
+if TYPE_CHECKING:
+    import logging
 
 
 def main() -> None:
     # Configure logging
-    log.init()
-    logger = log.get_logger("download")
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
+    log.init(loop=loop)
+    logger = log.get_logger("download")
 
     downloader = QuoteDownloader(logger, loop)
     downloader()
@@ -33,7 +39,7 @@ class QuoteDownloader:
         self.logger = logger
         self.loop = loop
         self.session = aiohttp.ClientSession(loop=loop)
-        self.app = token.refresh_app_token()
+        self.app = token.App.load()
         self.user_token = token.Token.load("snergebot")
 
     def __del__(self) -> None:
@@ -44,9 +50,11 @@ class QuoteDownloader:
         self.loop.run_until_complete(self.communication())
 
     async def communication(self) -> None:
-        with open("output.txt", "a", encoding="utf-8") as file:
+        await self.app.refresh(self.session)
+
+        with pathlib.Path("output.txt").open("a", encoding="utf-8") as file:
             async with self.session.ws_connect(
-                "wss://eventsub.wss.twitch.tv/ws?keepalive_timeout_seconds=60"
+                "wss://eventsub.wss.twitch.tv/ws?keepalive_timeout_seconds=5",
             ) as socket:
                 welcome: aiohttp.WSMessage = await anext(socket)
                 welcome_data = welcome.json()
@@ -57,11 +65,13 @@ class QuoteDownloader:
                 await self.register(session_id)
                 task = self.loop.create_task(self.query())
 
-                while not task.result():
-                    msg: aiohttp.WSMessage = await socket.receive(timeout=5)
+                while not task.done():
+                    msg: aiohttp.WSMessage = await socket.receive(timeout=30)
                     if msg.type != aiohttp.WSMsgType.TEXT:
                         self.logger.warning(
-                            "Unexpected %s message type", msg.type, extra={"msg": msg}
+                            "Unexpected %s message type",
+                            msg.type,
+                            extra={"packet": msg},
                         )
                         continue
 
@@ -80,10 +90,12 @@ class QuoteDownloader:
         task.cancel()
         await task
 
-    async def query(self) -> None:
-        for quote in range(2968, 3000):
+    async def query(self) -> bool:
+        for quote in range(2973, 2992):
             await asyncio.sleep(10)
             await self.send_message(f"!unosearch {quote}")
+
+        return True
 
     async def send_message(self, message: str) -> None:
         response = await self.session.post(
@@ -102,7 +114,7 @@ class QuoteDownloader:
         self.logger.info("Sent message %s: status=%d", message, response.status)
 
     async def register(self, session_id: str) -> None:
-        self.user_token.renew(self.app)
+        await self.user_token.renew(self.session, self.app)
 
         response = await self.session.post(
             "https://api.twitch.tv/helix/eventsub/subscriptions",
@@ -124,7 +136,7 @@ class QuoteDownloader:
 
         self.logger.warning("Subscription result %d", response.status)
         self.logger.warning(await response.json())
-        if response.status != 202:
+        if response.status != http.HTTPStatus.ACCEPTED:
             raise RuntimeError
 
 

@@ -1,10 +1,9 @@
-#!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2023 Kitsune
 #
 # SPDX-License-Identifier: BSD-2-Clause
 
 
-from __future__ import annotations
+from __future__ import annotations as _future_annotations
 
 import statistics
 
@@ -13,19 +12,19 @@ class GuessStore:
     use_latest_reply: bool
     guesses: dict[str, int]
 
-    def __init__(self, use_latest_reply: bool = True):
+    def __init__(self, *, use_latest_reply: bool = True) -> None:
         self.use_latest_reply = use_latest_reply
         self.guesses = {}
 
     def accept_guess(self, name: str, value: int) -> None:
-        if self.use_latest_reply:
+        if self.use_latest_reply or name not in self.guesses:
             self.guesses[name] = value
-        else:
-            if name not in self.guesses:
-                self.guesses[name] = value
 
     def get_score(
-        self, value: float, closest_without_going_over: bool
+        self,
+        value: float,
+        *,
+        closest_without_going_over: bool,
     ) -> tuple[list[str], set[int]]:
         # Find the score value to use as a result
 

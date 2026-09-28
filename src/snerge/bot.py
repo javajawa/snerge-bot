@@ -1,314 +1,385 @@
-#!/usr/bin/env python3
-# SPDX-FileCopyrightText: 2020 Benedict Harcourt <ben.harcourt@harcourtprogramming.co.uk>
+# SPDX-FileCopyrightText: 2024 Benedict Harcourt <ben.harcourt@harcourtprogramming.co.uk>
 #
 # SPDX-License-Identifier: BSD-2-Clause
 
-from __future__ import annotations
+from __future__ import annotations as _future_annotations
 
-from typing import Awaitable, Callable
+from collections.abc import Awaitable
+from typing import TYPE_CHECKING, Any
 
 import asyncio
-import os.path
+import http
+import json
 import random
-import re
 
-from twitchio import Client, Channel, Chatter, Message, User  # type: ignore
-import twitchio.client  # type: ignore
+import aiohttp
 
-from snerge import log
-from snerge.config import Config
-from snerge.token import App
-from snerge.guessmessagehandler import GuessMessageHandler
-from prosegen import ProseGen, Fact, GeneratedQuote
+from .guess import GuessMessageHandler
+from .quotes import SnergeHandler
+from .util import KnownBadges
 
-CONTRACTABLE = re.compile(" (old|just|of|[a-z]{3,6}ing)[^a-z]")
-CONTRACT_IS = re.compile(" ([a-z]+) is ")
+if TYPE_CHECKING:
+    import logging
+
+    from prosegen import ProseGen
+
+    from .config import Config
+    from .token import Tokens
+    from .util.twitch_stubs import (
+        TwitchChatEvent,
+        TwitchEvent,
+        TwitchNotificationEvent,
+        TwitchRewardRedemptionEvent,
+    )
+
+type Handler = Awaitable[Handler | None]
 
 
-def contract(g: re.Match[str]) -> str:
-    x = g.group(0)
-    return x[:-2] + "'" + x[-1]
-
-
-def contract_is(g: re.Match[str]) -> str:
-    return f" {g.group(1)}'s "
-
-
-class Bot(Client):  # type: ignore
+class SnergeBot:
+    logger: logging.Logger
+    session: aiohttp.ClientSession
+    auth: Tokens
     config: Config
-    quotes: ProseGen
     guess_handler: GuessMessageHandler
-    commands: dict[str, tuple[bool, Callable[[Channel, str], Awaitable[None]]]]
+    snerge_handler: SnergeHandler
+    chat_event: asyncio.Event
 
-    last_message: int = 0
-    _stop: bool = False
+    __slots__ = (
+        "auth",
+        "chat_event",
+        "config",
+        "guess_handler",
+        "logger",
+        "session",
+        "snerge_handler",
+    )
 
-    def __init__(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    def __init__(
         self,
-        logger: log.Logger,
-        loop: asyncio.AbstractEventLoop,
+        logger: logging.Logger,
+        session: aiohttp.ClientSession,
+        tokens: Tokens,
         config: Config,
-        app: App,
         quotes: ProseGen,
     ) -> None:
-        super().__init__(token=app.irc_token, loop=loop)
-
         self.logger = logger
+        self.session = session
         self.config = config
-        self.quotes = quotes
+        self.auth = tokens
         self.guess_handler = GuessMessageHandler(
-            self.config.use_latest_reply,
-            self.config.stopguess_delay,
-            self.config.closest_without_going_over,
+            use_latest_reply=config.use_latest_reply,
+            stopguess_delay=config.stopguess_delay,
+            closest_without_going_over=config.closest_without_going_over,
         )
+        self.snerge_handler = SnergeHandler(logger.getChild("quotes"), config, quotes)
+        self.chat_event = asyncio.Event()
 
-        self.commands = {
-            "!guesscommands": (True, self.guess_handler.guess_commands),
-            "!startguessing": (True, self.guess_handler.start_guessing),
-            "!stopguessing": (True, self.guess_handler.stop_guessing),
-            "!score": (True, self.guess_handler.score),
-            "!stats": (True, self.guess_handler.stats),
-            "!snerge": (True, lambda _, prompt: self.send_quote(prompt)),
-            "!snuwuge": (True, lambda _, prompt: self.send_quote(prompt, force_owo=True)),
-            "!subscribe": (False, self.subscribe),
-            "!unsubscribe": (False, self.subscribe),
-        }
+    async def auto_time_loop(self) -> None:
+        try:
+            while True:
+                if not self.chat_event.is_set():
+                    self.logger.info("Waiting for next chat event")
+                    await self.chat_event.wait()
 
-        twitchio.client.logger = logger.getChild("client")
+                self.logger.debug("Sending automated quote")
+                quote = self.snerge_handler.quote()
+                next_call = random.randint(  # noqa: S311 - not cryptographic.
+                    *self.config.auto_quote_time,
+                )
+                await self.send_message(quote)
 
-    async def _start(self) -> None:
-        self.logger.info("Starting up IRC bot")
+                self.logger.info(
+                    "Scheduling next automated quote in %d:%d",
+                    next_call // 60,
+                    next_call % 60,
+                )
 
-        await super().start()
+                # Queue the next attempt to send a quote
+                await asyncio.sleep(next_call - self.config.chat_active_probe)
+                self.logger.info("Clearing recent chat event flag before next quote")
+                self.chat_event.clear()
+                await asyncio.sleep(self.config.chat_active_probe)
+        except asyncio.CancelledError:
+            pass
 
-    async def event_ready(self) -> None:
-        self.logger.info("Connected as %s", self.nick)
-        self.logger.info("Requesting to join %s", self.config.channel)
-        self.loop.create_task(self.join(), name="join-channel")
-
-    async def event_reconnect(self) -> None:
-        self.logger.info("Reconnect occurred")
-        self.loop.call_later(
-            10, lambda: self.loop.create_task(self.join(), name="join-channel")
+    async def communication(self) -> None:
+        handler = await self._handle_socket(
+            "wss://eventsub.wss.twitch.tv/ws?keepalive_timeout_seconds=10",
+            register=True,
+            connected=asyncio.Future(),
         )
+        while handler:
+            handler = await handler
 
-    async def join(self) -> None:
-        await asyncio.sleep(5)
-        self.logger.info("Joining channel %s", self.config.channel)
-        await self.join_channels([self.config.channel])
+        await self.send_message("sergeSnerge Sleepy time!")
 
-    async def event_join(self, channel: Channel, user: User) -> None:
-        if channel.name != self.config.channel:
+    async def _handle_socket(  # noqa: C901
+        self,
+        endpoint: str,
+        *,
+        register: bool,
+        connected: asyncio.Future[bool],
+    ) -> Handler | None:
+        msg: aiohttp.WSMessage
+        next_call: Handler | None = None
+
+        try:
+            self.logger.info("Connecting to websocket endpoint")
+            async with self.session.ws_connect(endpoint) as socket:
+                async for msg in socket:
+                    if msg.type == aiohttp.WSMsgType.CLOSE:
+                        self.logger.warning("Received close message")
+                        break
+
+                    if msg.type != aiohttp.WSMsgType.TEXT:
+                        self.logger.warning(
+                            "Unexpected %s message type",
+                            msg.type,
+                            extra={"packet": msg},
+                        )
+                        continue
+
+                    data: TwitchEvent = msg.json()
+
+                    match data["metadata"]["message_type"]:
+                        case "session_welcome":
+                            session_id = data["payload"]["session"]["id"]
+                            self.logger.info("Session ID: %s", session_id)
+                            if register:
+                                self.logger.info("Registering subscriptions")
+                                await self.register(session_id)
+                                await self.send_message("Never fear, Snerge is here!")
+                            connected.set_result(True)
+
+                        case "session_keepalive":
+                            pass
+
+                        case "session_reconnect":
+                            self.logger.info("Handling reconnect request")
+                            callback: asyncio.Future[bool] = asyncio.Future()
+                            next_call = self._handle_socket(
+                                data["payload"]["session"]["reconnect_url"],
+                                register=False,
+                                connected=callback,
+                            )
+                            next_call = asyncio.create_task(next_call)
+
+                            self.logger.info("Waiting for new socket to report ready")
+                            await callback
+                            self.logger.info("New socket connected")
+
+                        case "notification":
+                            try:
+                                await self.notification(data["payload"])
+                            except Exception as exp:
+                                self.logger.exception(
+                                    "Error handling notification",
+                                    exc_info=exp,
+                                    extra={"event": data},
+                                )
+
+                        case _:
+                            self.logger.warning(
+                                "Unknown event type: %s",
+                                data["metadata"]["message_type"],
+                            )
+
+        except asyncio.CancelledError:
+            self.logger.info("Ending websocket loop")
+            return None
+
+        self.logger.info("Websocket closed")
+
+        return next_call
+
+    async def notification(self, payload: dict[str, Any]) -> None:
+        subscription_type = payload["subscription"]["type"]
+
+        match subscription_type:
+            case "channel.chat.message":
+                await self.handle_chat_message(payload["event"])
+            case "channel.chat.notification":
+                await self.handle_chat_notification(payload["event"])
+            case "channel.channel_points_custom_reward_redemption.add":
+                await self.handle_reward_redemption(payload["event"])
+            case "channel.update":
+                self.logger.info(
+                    "Stream updated to %s - %s",
+                    payload["event"]["category_name"],
+                    payload["event"]["title"],
+                )
+            case _:
+                self.logger.info(
+                    "Unhandled notification for subscription %s",
+                    subscription_type,
+                    extra=payload,
+                )
+
+    async def handle_chat_message(self, event: TwitchChatEvent) -> None:
+        if event["chatter_user_id"] == str(self.auth.chatter_id):
             return
-        if user.name.lower() != self.nick.lower():
+        if event["broadcaster_user_id"] != self.auth.broadcaster_id:
             return
-
-        self.logger.info("Connected to channel %s", self.config.channel)
-        await channel.send("Never fear, Snerge is here!")
-
-    async def event_message(self, message: Message) -> None:
-        # Ignore loop-back messages
-        if message.echo:
+        if KnownBadges.BOT in event["badges"]:
             return
 
         # Note when chat last happened
-        self.last_message = int(self.loop.time())
-        self.logger.debug("Saw a message at %d", self.last_message)
+        self.chat_event.set()
 
-        if not (target := self.get_channel(self.config.channel)):
+        text = event["message"]["text"]
+        if text.startswith("!guess "):
+            self.logger.debug("Passing '%s' to guess handler", text)
+            async for resp in self.guess_handler.message_process(event):
+                await self.send_message(resp)
+
+        elif text.startswith("!snerge"):
+            self.logger.debug("Passing '%s' to snerge handler", text)
+            quote = self.snerge_handler.quote(text.removeprefix("!snerge").strip())
+            await self.send_message(quote)
+        elif text.startswith("!snuwuge"):
+            self.logger.debug("Passing '%s' to snerge handler", text)
+            quote = self.snerge_handler.quote(text.removeprefix("!snuwuge").strip(), force_owo=True)
+            await self.send_message(quote)
+
+        elif text.startswith(("!subscribe", "!unsubscribe")):
+            self.logger.debug("Passing '%s' to subscribe handler", text)
+            if reply := self.snerge_handler.subscribe(event):
+                await self.send_message(reply)
+
+    async def handle_chat_notification(self, event: TwitchNotificationEvent) -> None:
+        if event[event["notice_type"]] is None:
+            self.logger.warning("Receive notification %s without data", event["notice_type"])
             return
 
-        chatter = target.get_chatter(message.author.name)
-        if not isinstance(chatter, Chatter):
+        match event["notice_type"]:
+            case "resub":
+                if event["resub"]:
+                    self.logger.info(
+                        "%s resubscribed as tier %s for %d months (%d months total)",
+                        event["chatter_user_name"],
+                        event["resub"]["sub_tier"],
+                        event["resub"]["duration_months"],
+                        event["resub"]["cumulative_months"],
+                    )
+
+            case "sub_gift":
+                if event["sub_gift"]:
+                    self.logger.info(
+                        "%s gifted %s to %s",
+                        event["chatter_user_name"],
+                        event["sub_gift"]["sub_tier"],
+                        event["sub_gift"]["recipient_user_name"],
+                    )
+
+            case _:
+                self.logger.info(
+                    "%s performed action %s",
+                    event["chatter_user_name"],
+                    event["notice_type"],
+                    extra=event[event["notice_type"]],
+                )
+
+    async def handle_reward_redemption(self, event: TwitchRewardRedemptionEvent) -> None:
+        if event["reward"]["id"] != "03979e28-d8c5-4985-8a32-fc27da71b3c1":
             return
 
-        # Run the guess handler,
-        await self.guess_handler.message_process(message, chatter)
+        self.logger.info("Reward redeemed by %s", event["user_name"], extra=event)
+        quote = self.snerge_handler.quote()
+        await self.send_message(event["user_name"] + " " + quote)
 
-        command, _, content = str(message.content).partition(" ")
-        command = command.lower()
+    async def send_message(self, message: str) -> None:
+        response = await self.session.post(
+            "https://api.twitch.tv/helix/chat/messages",
+            headers={
+                "Content-type": "application/json",
+                "Client-ID": self.auth.client_id,
+                "Authorization": "Bearer " + self.auth.app_token,
+            },
+            json={
+                "broadcaster_id": self.auth.broadcaster_id,  # SergeYager
+                "sender_id": self.auth.chatter_id,  # SnergeBot
+                "message": message,
+            },
+        )
 
-        if command not in self.commands:
-            return
-
-        need_mod, call = self.commands[command]
-
-        if need_mod and not (
-            chatter.is_mod
-            or chatter.is_broadcaster
-            or message.author.name == "thirsty_kitteh"
-        ):
-            return
-
-        self.logger.info("Command %s from %s", command, chatter.display_name)
-        await call(message.channel, content)
-
-    async def subscribe(self, chatter: Chatter, topic: str) -> None:
-        if topic not in [
-            "snerge",
-            "snerge facts",
-            "snergefacts",
-            "serge facts",
-            "sergefacts",
-        ]:
-            return
-
-        if os.path.exists(os.path.join("subscribed", chatter.name)):
-            await chatter.send("You are already subscribed to SnergeFacts.")
-            return
-
-        if not (target := self.get_channel(self.config.channel)):
-            return
-
-        with open(os.path.join("subscribed", chatter.name), "w", encoding="utf-8"):
+        payload = await response.json()
+        if "data" not in payload:
             pass
 
-        await target.send(
-            (
-                f"Thank you {chatter.name} for subscribing to SnergeFacts! "
-                "Here's a special SnergeFact for you!"
-            )
+        sent = payload.get("data", [{}])[0].get("is_sent", False)
+        reason = payload.get("data", [{}])[0].get("drop_reason", payload.get("message"))
+
+        self.logger.info(
+            "Sent message '%s'",
+            message,
+            extra={"status": response.status, "sent": sent, "reason": reason},
         )
-        await self.send_quote()
 
-    async def queue_quote(self) -> None:
-        await self.connect()
+    async def register(self, session_id: str) -> None:
+        user_events: dict[str, str] = {
+            "channel.chat.message": "1",
+            "channel.chat.message_delete": "1",
+            "channel.update": "2",
+            "channel.chat.notification": "1",
+        }
 
-        while not self._stop:
-            # If we haven't managed to connect to the channel, wait a while.
-            if not self.get_channel(self.config.channel):
-                next_call = random.randint(*self.config.startup_probe)
-                self.logger.info("No target initialised, waiting %d seconds", next_call)
+        for event_type, version in user_events.items():
+            config = {
+                "type": event_type,
+                "version": version,
+                "condition": {
+                    "broadcaster_user_id": self.auth.broadcaster_id,
+                    "user_id": self.auth.broadcaster_id,
+                },
+                "transport": {"method": "websocket", "session_id": session_id},
+            }
+            await self.register_eventsub(self.auth.broadcaster_token, config)
 
-            # If we haven't heard from chat in a while, assume the stream is down
-            elif self.loop.time() - self.last_message > self.config.chat_active_probe[0]:
-                next_call = random.randint(*self.config.chat_active_probe)
-                self.logger.debug("Chat not active, waiting %d seconds", next_call)
+        channel_events: dict[str, str] = {
+            "channel.channel_points_custom_reward_redemption.add": "1",
+            "channel.bits.use": "1",
+        }
 
-            # Otherwise, send off a quote
-            else:
-                await self.send_quote()
-                next_call = random.randint(*self.config.auto_quote_time)
+        for event_type, version in channel_events.items():
+            config = {
+                "type": event_type,
+                "version": version,
+                "condition": {
+                    "broadcaster_user_id": self.auth.broadcaster_id,
+                },
+                "transport": {"method": "websocket", "session_id": session_id},
+            }
+            await self.register_eventsub(self.auth.broadcaster_token, config)
 
-            # Queue the next attempt to send a quote
-            await self.sleep(next_call)
+    async def register_eventsub(self, auth: str, config: dict[str, Any]) -> None:
+        response = await self.session.post(
+            "https://api.twitch.tv/helix/eventsub/subscriptions",
+            headers={
+                "Content-type": "application/json",
+                "Client-ID": self.auth.client_id,
+                "Authorization": "Bearer " + auth,
+            },
+            json=config,
+        )
 
-        await self.close()
+        if response.status == http.HTTPStatus.ACCEPTED:
+            self.logger.info("Subscription result %d for %s", response.status, config["type"])
+        else:
+            try:
+                data = await response.json()
+            except (aiohttp.ContentTypeError, json.JSONDecodeError):
+                data = {"resp": await response.text()}
 
-    async def sleep(self, time: int) -> None:
-        target_time = self.loop.time() + time
+            if "message" in data:
+                data[".message"] = data["message"]
+                del data["message"]
+            if "level" in data:
+                data[".level"] = data["level"]
+                del data["level"]
 
-        while True:
-            if self._stop:
-                return
-
-            sleep_for = min(10.0, target_time - self.loop.time())
-
-            if sleep_for <= 0:
-                return
-
-            await asyncio.sleep(sleep_for)
-
-    async def send_quote(self, prompt: str | None = None, force_owo: bool = False) -> None:
-        if not (target := self.get_channel(self.config.channel)):
-            return
-
-        quote = get_quote(self.quotes, *self.config.quote_length, prompt)
-        quote = self.cuteify(quote, force_owo)
-
-        self.logger.info("Sending quote %s", quote)
-
-        await target.send(quote)
-
-    def cuteify(self, quote: str, force_owo: bool) -> str:
-        # Add in the accent.
-        if random.randint(0, 10) == 0:
-            quote = CONTRACTABLE.sub(contract, quote)
-        if random.randint(0, 5) == 0:
-            quote = CONTRACT_IS.sub(contract_is, quote)
-
-        # There is a 0.5% chance of Snerge going UwU!
-        if force_owo or random.randint(0, 200) == 0:
-            return "~UωU~ " + owo_magic(quote) + " ~UωU~"
-
-        # Shorter quotes have a 2.5% chance for an Oh nyo~
-        if len(quote) < self.config.quote_length[1] - 20 and random.randint(0, 40) == 0:
-            quote = quote + "  ✧･ﾟ. Oh nyo~! :3 *･ﾟ✧"
-
-        return "sergeSnerge " + quote + " sergeSnerge"
-
-    def request_stop(self) -> None:
-        self._stop = True
-
-    async def close(self) -> None:
-        if target := self.get_channel(self.config.channel):
-            await target.send("sergeSnerge Sleepy time!")
-
-        self._closing.set()
-        await asyncio.sleep(2)
-        await super().close()
-
-
-def get_quote(
-    quotes: ProseGen, min_length: int, max_length: int, prompt: str | None = None
-) -> str:
-    initial_tokens = [
-        x for x in Fact(prompt or "", "chat").tokens if x and x in quotes.dictionary
-    ]
-
-    # Max 100 attempts to generate a quote
-    for _ in range(100):
-        generator = GeneratedQuote(quotes, min_length)
-        for token in initial_tokens:
-            generator.append_token(token)
-
-        wisdom = generator.make_statement()
-
-        if min_length < len(wisdom) < max_length:
-            return wisdom
-
-    return "I don't like coffee."
-
-
-def owo_magic(non_owo_string: str) -> str:
-    """
-    Converts a non_owo_string to an owo_string
-
-    :param non_owo_string: normal string
-
-    :return: owo_string
-    """
-
-    return (
-        non_owo_string.replace("ove", "wuw")
-        .replace("R", "W")
-        .replace("r", "w")
-        .replace("L", "W")
-        .replace("l", "w")
-    )
-
-
-async def main() -> None:
-    from snerge import config, token, quotes  # pylint: disable=import-outside-toplevel
-
-    log.init()
-    logger = log.get_logger()
-    loop = asyncio.get_event_loop()
-
-    app = token.refresh_app_token()
-    data = await loop.run_in_executor(None, quotes.load_data, logger, ProseGen(20))
-
-    # Create the IRC bot
-    bot = Bot(
-        logger=logger,
-        loop=asyncio.get_event_loop(),
-        app=app,
-        config=config.config(),
-        quotes=data,
-    )
-
-    await bot.start()
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+            self.logger.error(
+                "Error %s subscribing to %s",
+                response.status,
+                config["type"],
+                extra=data,
+            )

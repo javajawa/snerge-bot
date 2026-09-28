@@ -4,6 +4,7 @@
 
 from __future__ import annotations as _future_annotations
 
-from . import entrypoint
+from .log import Logger, get_logger, init
+from .twitch_stubs import KnownBadges
 
-entrypoint()
+__all__ = "KnownBadges", "Logger", "get_logger", "init"

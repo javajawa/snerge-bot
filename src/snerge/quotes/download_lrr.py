@@ -1,31 +1,30 @@
-#!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2024 Benedict Harcourt <ben.harcourt@harcourtprogramming.co.uk>
 #
 # SPDX-License-Identifier: BSD-2-Clause
 
-from __future__ import annotations
+from __future__ import annotations as _future_annotations
 
 import asyncio
 import csv
+import pathlib
 
 import aiohttp
-from bs4 import BeautifulSoup, Tag, NavigableString
+from bs4 import BeautifulSoup, NavigableString, Tag
 
 from snerge import log
 
 
 async def download_lrr_quotes(logger: log.Logger) -> None:
-    with open("serge-lrr.csv", "w", encoding="utf-8") as quotes:
+    with pathlib.Path("serge-lrr.csv").open("w", encoding="utf-8") as quotes:
         writer = csv.DictWriter(quotes, ("id", "date", "author", "quote"))
         async with aiohttp.ClientSession() as session:
             calls = (
-                load_lrr_quote_page(logger, session, writer, page, 9500)
-                for page in range(1, 19)
+                load_lrr_quote_page(logger, session, writer, page, 9500) for page in range(1, 19)
             )
             await asyncio.gather(*calls)
 
 
-async def load_lrr_quote_page(  # pylint: disable=too-many-locals
+async def load_lrr_quote_page(
     logger: log.Logger,
     session: aiohttp.ClientSession,
     writer: csv.DictWriter[str],
@@ -33,9 +32,7 @@ async def load_lrr_quote_page(  # pylint: disable=too-many-locals
     max_id: int,
 ) -> None:
     logger.info("Loading LRR quote page %d", page)
-    html = await session.get(
-        f"https://lrrbot.com/quotes/search?q=serge&mode=name&page={page}"
-    )
+    html = await session.get(f"https://lrrbot.com/quotes/search?q=serge&mode=name&page={page}")
     soup = BeautifulSoup(await html.text(), "html.parser")
 
     quotes = soup.find("ol", class_="quotes")
@@ -64,7 +61,12 @@ async def load_lrr_quote_page(  # pylint: disable=too-many-locals
         if attrib_text == "Serge" or attrib_text.startswith("Serge, "):
             count += 1
             writer.writerow(
-                {"id": quote_id, "date": date, "author": attrib_text, "quote": quote_text}
+                {
+                    "id": quote_id,
+                    "date": date,
+                    "author": attrib_text,
+                    "quote": quote_text,
+                },
             )
 
     logger.info("Added %d LRR quotes from page %d", count, page)

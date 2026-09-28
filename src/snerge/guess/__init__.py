@@ -4,6 +4,6 @@
 
 from __future__ import annotations as _future_annotations
 
-from . import entrypoint
+from .handler import GuessMessageHandler
 
-entrypoint()
+__all__ = ("GuessMessageHandler",)

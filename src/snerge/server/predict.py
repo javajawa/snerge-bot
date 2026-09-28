@@ -1,55 +1,28 @@
-#!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2021 Benedict Harcourt <ben.harcourt@harcourtprogramming.co.uk>
 #
 # SPDX-License-Identifier: BSD-2-Clause
 
-from __future__ import annotations
+from __future__ import annotations as _future_annotations
 
-from typing import Any, List
+from typing import Any
 
 import json
 
-from aiohttp.web import Request, Response, FileResponse, StreamResponse
+from aiohttp.web import Request, Response
 
 import prosegen.prosegen
 from prosegen import ProseGen
 
-from snerge.util import SetEncoder
+from .util import SetEncoder
 
 
 class PredictHandler:
     quotes: ProseGen
-    mapping: List[Any] = []
+    mapping: list[Any]
 
     def __init__(self, quotes: ProseGen) -> None:
         self.quotes = quotes
-
-    @staticmethod
-    async def handle_static(request: Request) -> StreamResponse:
-        path = request.match_info.get("path", "")
-
-        if path == "predict.js":
-            return FileResponse(
-                status=200,
-                headers={"Content-Type": "text/javascript"},
-                path="html/predict/predict.js",
-            )
-
-        if path == "predict.css":
-            return FileResponse(
-                status=200,
-                headers={"Content-Type": "text/css"},
-                path="html/predict/predict.css",
-            )
-
-        if path == "":
-            return FileResponse(
-                status=200,
-                headers={"Content-Type": "text/html"},
-                path="html/predict/predict.html",
-            )
-
-        return Response(status=200, text=path)
+        self.mapping = []
 
     async def get_dictionary(self, _: Request) -> Response:
         tokens: set[str] = set(self.quotes.dictionary.keys())
