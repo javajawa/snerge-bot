@@ -2,21 +2,24 @@
 #
 # SPDX-License-Identifier: BSD-2-Clause
 
+from __future__ import annotations as _future_annotations
+
+import typing
+
 import asyncio
 import dataclasses
 import functools
 import itertools
 import pathlib
 import textwrap
-import typing
 import urllib.parse
 
 import aiohttp
-import epicstore_api  # type: ignore[import-not-found]
+import epicstore_api  # type: ignore[import-untyped]
 
 
 @dataclasses.dataclass
-class GameInfo:  # pylint: disable=too-many-instance-attributes
+class GameInfo:
     name: str
     source: str
     description: str
@@ -79,24 +82,27 @@ class Foo:
     async def main(self) -> None:
         self.session = aiohttp.ClientSession()
         self.epic_api = epicstore_api.EpicGamesStoreAPI()
+        target = pathlib.Path("games.md")
 
         try:
-            with open("./games.md", "w", encoding="utf-8") as out:
-                with self.file.open("r", encoding="utf-8") as source:
-                    for line in source.readlines():
-                        if not line.strip():
-                            continue
+            with (
+                target.open("w", encoding="utf-8") as out,
+                self.file.open("r", encoding="utf-8") as source,
+            ):
+                for line in source.readlines():
+                    if not line.strip():
+                        continue
 
-                        if not line.startswith("#"):
-                            out.write(line)
-                            continue
+                    if not line.startswith("#"):
+                        out.write(line)
+                        continue
 
-                        out.write("\n")
-                        starred = "**" in line
-                        game = line.strip().strip("*").strip("#").strip()
-                        await self.get_game(game, out)
-                        if starred:
-                            out.write("> **Note**\n> Marked as exciting by Serge\n\n")
+                    out.write("\n")
+                    starred = "**" in line
+                    game = line.strip().strip("*").strip("#").strip()
+                    await self.get_game(game, out)
+                    if starred:
+                        out.write("> **Note**\n> Marked as exciting by Serge\n\n")
 
         finally:
             await self.session.close()
@@ -107,7 +113,7 @@ class Foo:
 
         if not self.steam:
             response = await self.session.get(
-                "https://api.steampowered.com/ISteamApps/GetAppList/v0002/?format=json"
+                "https://api.steampowered.com/ISteamApps/GetAppList/v0002/?format=json",
             )
             self.steam = {
                 x["name"].strip("™ "): x["appid"]
@@ -118,7 +124,7 @@ class Foo:
             return None
 
         response = await self.session.get(
-            "https://store.steampowered.com/api/appdetails?appids=" + str(self.steam[name])
+            "https://store.steampowered.com/api/appdetails?appids=" + str(self.steam[name]),
         )
         json = await response.json()
         game = json[str(self.steam[name])]["data"]
@@ -184,14 +190,12 @@ class Foo:
             return None
 
         games = await asyncio.get_running_loop().run_in_executor(
-            None, functools.partial(self.epic_api.fetch_store_games, keywords=name)
+            None,
+            functools.partial(self.epic_api.fetch_store_games, keywords=name),
         )
 
         for game in (
-            games.get("data", {})
-            .get("Catalog", {})
-            .get("searchStore", {})
-            .get("elements", [])
+            games.get("data", {}).get("Catalog", {}).get("searchStore", {}).get("elements", [])
         ):
             if game.get("title").replace("Standard Edition", "").strip("™ ") != name:
                 continue
@@ -204,12 +208,12 @@ class Foo:
             tags = set(
                 itertools.chain.from_iterable(
                     page["data"]["meta"].get("tags", []) for page in data["pages"]
-                )
+                ),
             )
             platforms = set(
                 itertools.chain.from_iterable(
                     page["data"]["meta"].get("platform", []) for page in data["pages"]
-                )
+                ),
             )
 
             return GameInfo(
@@ -224,7 +228,7 @@ class Foo:
                     game["price"]["totalPrice"]["currencyCode"]: game["price"]["totalPrice"][
                         "discountPrice"
                     ]
-                    / 100
+                    / 100,
                 },
             )
 
@@ -240,30 +244,23 @@ class Foo:
         game = GameList([game for game in games if game])
 
         if not game.games:
-            print(name, "not in humble, epic, or steam -- typo?")
             out.write(f"### {name}\n")
             out.write("_No game metadata located._\n\n")
             return
 
         out.write(f"### [{game.name}]({game.website})\n")
 
-        for currency, (price, link) in game.prices.items():
-            out.write(f"[{price:.2f}{currency}]({link}) | ")
+        out.writelines(
+            f"[{price:.2f}{currency}]({link}) | " for currency, (price, link) in game.prices.items()
+        )
 
-        for tag in game.tags:
-            out.write(f"{tag} | ")
+        out.writelines(f"{tag} | " for tag in game.tags)
 
-        for platform in game.platforms:
-            out.write(
-                f"![{platform}](https://img.shields.io/badge/platform-{platform}-blue) | "
-            )
+        out.writelines(
+            f"![{platform}](https://img.shields.io/badge/platform-{platform}-blue) | "
+            for platform in game.platforms
+        )
 
         out.write("\n\n")
-
-        # if game.get("content_descriptors", {}).get("notes"):
-        #     out.write("> **Warning**\n> ")
-        #     out.write(game["content_descriptors"]["notes"])
-        #     out.write("\n\n")
-
         out.write(textwrap.indent(game.description, "> "))
         out.write("\n\n")

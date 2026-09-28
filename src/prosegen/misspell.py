@@ -1,18 +1,12 @@
-#!/usr/bin/python3
-# vim: nospell expandtab ts=4
-
 # SPDX-FileCopyrightText: 2020 Benedict Harcourt <ben.harcourt@harcourtprogramming.co.uk>
 #
 # SPDX-License-Identifier: BSD-2-Clause
 
-# This fill will always have "too many lines"
-# pylint: disable=C0302
-
-from __future__ import annotations
+from __future__ import annotations as _future_annotations
 
 
 def replace(value: str) -> str:
-    return _MAP[value] if value in _MAP else value
+    return _MAP.get(value, value)
 
 
 _MAP = {
@@ -58,8 +52,8 @@ _MAP = {
     "pharmacistjudge": "PharmacistJudge",
     "ravynn": "Ravynn",
     "sarah": "Sarah",
-    "suffix": "𝐒𝐔𝐅𝐅𝐈𝐗",
-    "suffix's": "𝐒𝐔𝐅𝐅𝐈𝐗'𝐒",
+    "suffix": "𝐒𝐔𝐅𝐅𝐈𝐗",  # noqa: RUF001
+    "suffix's": "𝐒𝐔𝐅𝐅𝐈𝐗'𝐒",  # noqa: RUF001
     "seri": "Serifina",
     "serifina": "Serifina",
     "tq": "TQ",

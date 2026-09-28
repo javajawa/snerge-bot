@@ -1,17 +1,14 @@
-#!/usr/bin/python3
-
 # SPDX-FileCopyrightText: 2020 Benedict Harcourt <ben.harcourt@harcourtprogramming.co.uk>
 #
 # SPDX-License-Identifier: BSD-2-Clause
 
-from __future__ import annotations
-
-from collections import Counter
-from dataclasses import dataclass
+from __future__ import annotations as _future_annotations
 
 import itertools
 import random
 import re
+from collections import Counter
+from dataclasses import dataclass
 
 from prosegen import misspell
 
@@ -25,7 +22,7 @@ SMALL_NUMBER = re.compile(r"(?:^| )[0-9](?: |$)")
 BIG_NUMBER = re.compile(r"(?:^| )[0-9]+(?: |$)")
 DO_NOT_WANT = re.compile(r"(?:^| )nooo+(?: |$)")
 SURPRISE = re.compile(r"(?:^| )oo+h+(?: |$)")
-TEXT_EN_DASH = re.compile(r"(\w)(--|–)")
+TEXT_EN_DASH = re.compile(r"(\w)(--|–)")  # noqa: RUF001
 ELLIPSIS_WITH_PUNCTUATION = re.compile(r"\.\.\.+([?!])")
 ELLIPSIS = re.compile(r"(\.\.\.+|…)")
 EMPHASIS = re.compile(r"(?:^| )\*([^*]+)\*(?: |$)")
@@ -48,39 +45,97 @@ class Punctuation:
 
 
 PUNCTUATION: dict[str, Punctuation] = {
-    "[!EN_DASH]": Punctuation("–", False, False),
-    "[!EM_DASH]": Punctuation("—", False, False),
-    "[!PERIOD]": Punctuation(".", False, True, True, True),
-    "[!ELLIPSIS]": Punctuation("…", False, True, True),
-    "[!EXCLAMATION]": Punctuation("!", False, True, True, True),
-    "[!QUESTION]": Punctuation("?", False, True, True, True),
-    "[!INTERROBANG]": Punctuation("‽", False, True, True, True),
-    "[!COMMA]": Punctuation(",", False, True),
-    "[!SEMICOLON]": Punctuation(";", False, True),
-    "[!COLON]": Punctuation(":", False, True),
+    "[!EN_DASH]": Punctuation("–", space_before=False, space_after=False),  # noqa: RUF001
+    "[!EM_DASH]": Punctuation("—", space_before=False, space_after=False),
+    "[!PERIOD]": Punctuation(
+        ".",
+        space_before=False,
+        space_after=True,
+        may_end_quote=True,
+        capital_after=True,
+    ),
+    "[!ELLIPSIS]": Punctuation("…", space_before=False, space_after=True, may_end_quote=True),
+    "[!EXCLAMATION]": Punctuation(
+        "!",
+        space_before=False,
+        space_after=True,
+        may_end_quote=True,
+        capital_after=True,
+    ),
+    "[!QUESTION]": Punctuation(
+        "?",
+        space_before=False,
+        space_after=True,
+        may_end_quote=True,
+        capital_after=True,
+    ),
+    "[!INTERROBANG]": Punctuation(
+        "‽",
+        space_before=False,
+        space_after=True,
+        may_end_quote=True,
+        capital_after=True,
+    ),
+    "[!COMMA]": Punctuation(",", space_before=False, space_after=True),
+    "[!SEMICOLON]": Punctuation(";", space_before=False, space_after=True),
+    "[!COLON]": Punctuation(":", space_before=False, space_after=True),
     "[!OPEN_QUOTE]": Punctuation(
-        '"', True, False, block_open="[!OPEN_QUOTE]", block_close="[!CLOSE_QUOTE]"
+        '"',
+        space_before=True,
+        space_after=False,
+        block_open="[!OPEN_QUOTE]",
+        block_close="[!CLOSE_QUOTE]",
     ),
     "[!CLOSE_QUOTE]": Punctuation(
-        '"', False, True, block_open="[!OPEN_QUOTE]", block_close="[!CLOSE_QUOTE]"
+        '"',
+        space_before=False,
+        space_after=True,
+        block_open="[!OPEN_QUOTE]",
+        block_close="[!CLOSE_QUOTE]",
     ),
     "[!OPEN_EMPHASIS]": Punctuation(
-        "*", True, False, block_open="[!OPEN_EMPHASIS]", block_close="[!CLOSE_EMPHASIS]"
+        "*",
+        space_before=True,
+        space_after=False,
+        block_open="[!OPEN_EMPHASIS]",
+        block_close="[!CLOSE_EMPHASIS]",
     ),
     "[!CLOSE_EMPHASIS]": Punctuation(
-        "*", False, True, block_open="[!OPEN_EMPHASIS]", block_close="[!CLOSE_EMPHASIS]"
+        "*",
+        space_before=False,
+        space_after=True,
+        block_open="[!OPEN_EMPHASIS]",
+        block_close="[!CLOSE_EMPHASIS]",
     ),
     "[!OPEN_BRACKETS]": Punctuation(
-        "(", True, False, block_open="[!OPEN_BRACKETS]", block_close="[!CLOSE_BRACKETS]"
+        "(",
+        space_before=True,
+        space_after=False,
+        block_open="[!OPEN_BRACKETS]",
+        block_close="[!CLOSE_BRACKETS]",
     ),
     "[!CLOSE_BRACKETS]": Punctuation(
-        ")", False, True, block_open="[!OPEN_BRACKETS]", block_close="[!CLOSE_BRACKETS]"
+        ")",
+        space_before=False,
+        space_after=True,
+        block_open="[!OPEN_BRACKETS]",
+        block_close="[!CLOSE_BRACKETS]",
     ),
-    "[!BIG_NUMBER]": Punctuation("69", True, True),
-    "[!NUMBER]": Punctuation("off-by-one", True, True),
-    "[!JAMES]": Punctuation("Chicken Lord James", True, True, may_end_quote=True),
-    "[!ICREAM]": Punctuation("James Ice Cream", True, True, may_end_quote=True),
-    "[!PRESENT]": Punctuation("Jo brought me", True, True),
+    "[!BIG_NUMBER]": Punctuation("69", space_before=True, space_after=True),
+    "[!NUMBER]": Punctuation("off-by-one", space_before=True, space_after=True),
+    "[!JAMES]": Punctuation(
+        "Chicken Lord James",
+        space_before=True,
+        space_after=True,
+        may_end_quote=True,
+    ),
+    "[!ICREAM]": Punctuation(
+        "James Ice Cream",
+        space_before=True,
+        space_after=True,
+        may_end_quote=True,
+    ),
+    "[!PRESENT]": Punctuation("Jo brought me", space_before=True, space_after=True),
 }
 
 
@@ -143,13 +198,13 @@ class ProseGen:
     dictionary: dict[str, set[Fact]]
     cont_buffer: Buffer
 
-    def __init__(self, buffer_size: int):
+    def __init__(self, buffer_size: int) -> None:
         self.size = buffer_size
         self.dataset = {}
         self.dictionary = {"[!END]": set()}
         self.cont_buffer = Buffer(self.size)
 
-    def add_knowledge(self, data: str, source: str = "", debug: bool = False) -> None:
+    def add_knowledge(self, data: str, source: str = "", *, debug: bool = False) -> None:
         fact = Fact(data, source)
 
         if not fact.tokens:
@@ -159,24 +214,24 @@ class ProseGen:
             self.dictionary.setdefault(token, set()).add(fact)
 
         if debug:
-            print(fact.tokens)
+            pass
 
-        self.add_words(self.cont_buffer, fact.tokens, debug)
-        self.add_word(self.cont_buffer, "[!END]", debug)
+        self.add_words(self.cont_buffer, fact.tokens, debug=debug)
+        self.add_word(self.cont_buffer, "[!END]", debug=debug)
 
         buff = Buffer(self.size)
-        self.add_words(buff, fact.tokens, debug)
-        self.add_word(buff, "[!END]", debug)
+        self.add_words(buff, fact.tokens, debug=debug)
+        self.add_word(buff, "[!END]", debug=debug)
 
-    def add_words(self, buff: Buffer, words: list[str], debug: bool) -> None:
+    def add_words(self, buff: Buffer, words: list[str], *, debug: bool) -> None:
         for word in words:
             if word == "":
                 continue
 
-            self.add_word(buff, word, debug)
+            self.add_word(buff, word, debug=debug)
             buff.push(word)
 
-    def add_word(self, buff: Buffer, word: str, debug: bool) -> None:
+    def add_word(self, buff: Buffer, word: str, *, debug: bool) -> None:
         last_hash = -1
 
         for size in range(1, self.size):
@@ -193,7 +248,7 @@ class ProseGen:
                 self.dataset[item] = Counter()
 
             if debug:
-                print(f"Phrase {buff.to_str(size)} continues to {word}")
+                pass
 
             if word in self.dataset[item]:
                 self.dataset[item][word] += 1
@@ -203,7 +258,7 @@ class ProseGen:
     def make_statement(self, min_len: int = 0) -> str:
         return GeneratedQuote(self, min_len).make_statement()
 
-    def get_token(self, buffer: Buffer, stack: list[str], can_end: bool) -> str:
+    def get_token(self, buffer: Buffer, stack: list[str], *, can_end: bool) -> str:
         options: Counter[str] = Counter()
 
         for size in range(1, buffer.size):
@@ -220,7 +275,7 @@ class ProseGen:
         if not options:
             return "[!END_NO_OPTIONS]"
 
-        i = random.randrange(sum(options.values()))
+        i = random.randrange(sum(options.values()))  # noqa: S311 - not cryptographic.
         return next(itertools.islice(options.elements(), i, None))
 
 
@@ -231,7 +286,7 @@ class GeneratedQuote:
     output: str = ""
 
     min_length: int
-    block_stack: list[str] = []
+    block_stack: list[str]
 
     next_token_in_title_case: bool = True
     space_before_next_token: bool = False
@@ -239,13 +294,14 @@ class GeneratedQuote:
     def __init__(self, prose: ProseGen, min_length: int) -> None:
         self.prose = prose
         self.buffer = Buffer(prose.size)
+        self.block_stack = []
         self.min_length = min_length
 
     def make_statement(self) -> str:
         while True:
             token = self.get_potential_token()
 
-            if token is None or token == "[!END]":
+            if token is None or token == "[!END]":  # noqa: S105 - not a security token
                 return self.output.strip()
 
             self.append_token(token)
@@ -269,7 +325,7 @@ class GeneratedQuote:
         if not options:
             return None
 
-        i = random.randrange(sum(options.values()))
+        i = random.randrange(sum(options.values()))  # noqa: S311 - not cryptographic
         return next(itertools.islice(options.elements(), i, None))
 
     def append_token(self, token: str) -> None:
@@ -291,7 +347,7 @@ class GeneratedQuote:
         self.next_token_in_title_case = False
         self.space_before_next_token = True
 
-    def _process_punctuation_token(self, token: str, in_block_change: bool = False) -> None:
+    def _process_punctuation_token(self, token: str, *, in_block_change: bool = False) -> None:
         punctuation = PUNCTUATION.get(token)
         if not punctuation:
             return
@@ -299,15 +355,16 @@ class GeneratedQuote:
         was_space = self.space_before_next_token
         was_title = self.next_token_in_title_case
 
-        self.space_before_next_token = (
-            self.space_before_next_token and punctuation.space_before
-        )
+        self.space_before_next_token = self.space_before_next_token and punctuation.space_before
 
-        if not in_block_change and punctuation.block_close:
-            if not self._handle_block_change(token, punctuation):
-                self.space_before_next_token = was_space
-                self.next_token_in_title_case = was_title
-                return
+        if (
+            not in_block_change
+            and punctuation.block_close
+            and not self._handle_block_change(token, punctuation)
+        ):
+            self.space_before_next_token = was_space
+            self.next_token_in_title_case = was_title
+            return
 
         self._append_token(punctuation.text)
 
@@ -334,9 +391,13 @@ class GeneratedQuote:
             if opening_punctuation.block_close == token:
                 return True
 
-            self._process_punctuation_token(opening_punctuation.block_close or "", True)
+            self._process_punctuation_token(
+                opening_punctuation.block_close or "",
+                in_block_change=True,
+            )
 
-        raise ValueError("Escaped block closing?")
+        msg = "Escaped block closing?"
+        raise ValueError(msg)
 
     @property
     def _can_end(self) -> bool:

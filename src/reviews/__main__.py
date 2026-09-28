@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: BSD-2-Clause
 
+from __future__ import annotations as _future_annotations
+
 import asyncio
 
 from . import Foo

@@ -1,10 +1,8 @@
-#!/usr/bin/python3
-
 # SPDX-FileCopyrightText: 2020 Benedict Harcourt <ben.harcourt@harcourtprogramming.co.uk>
 #
 # SPDX-License-Identifier: BSD-2-Clause
 
-from __future__ import annotations
+from __future__ import annotations as _future_annotations
 
 
 class Buffer:
@@ -26,10 +24,12 @@ class Buffer:
 
     def hash(self, items: int) -> int:
         if items > self.size:
-            raise IndexError("Attempting to hash more items than buffer size")
+            msg = "Attempting to hash more items than buffer size"
+            raise IndexError(msg)
 
         if items < 1:
-            raise IndexError("Must hash at least one item")
+            msg = "Must hash at least one item"
+            raise IndexError(msg)
 
         return hash(tuple(self.subset(items)))
 
