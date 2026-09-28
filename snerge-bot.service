@@ -11,6 +11,7 @@ User=eorzea
 Group=daemon
 WorkingDirectory=/srv/snerge-bot
 Environment="PYTHONPATH=/srv/snerge-bot/src"
+Restart=always
 
 [Install]
 WantedBy=multi-user.target
