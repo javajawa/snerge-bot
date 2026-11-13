@@ -102,7 +102,11 @@ async def create_httpd(
     servlet.router.add_route("POST", "/predict/predict", predict.make_prediction)
 
     oauth = server.OAuthHandler(log.get_logger("oauth"), session, tokens.oauth_app)
+    servlet.router.add_route("GET", "/me", oauth.whoami)
     servlet.router.add_route("GET", "/oauth", oauth.handle)
+    servlet.router.add_route("GET", "/oauth/mod", oauth.start_human)
+    servlet.router.add_route("GET", "/oauth/bot", oauth.start_bot)
+    servlet.middlewares.append(oauth.verify)
 
     # Create the website container
     _runner = web.AppRunner(
