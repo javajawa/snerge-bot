@@ -7,6 +7,7 @@
 
 /tokens/
 /venv/
+/.venv/
 /subscribed/
 
 /.mypy_cache
