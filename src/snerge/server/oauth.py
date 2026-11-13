@@ -13,7 +13,7 @@ import aiohttp
 from aiohttp.web import Request, Response
 from yarl import URL
 
-from snerge.token import App, Token
+from snerge.token import AppToken, Token
 
 if TYPE_CHECKING:
     import logging
@@ -32,10 +32,10 @@ class UserFetchError(Exception):
 class OAuthHandler:
     logger: logging.Logger
     session: aiohttp.ClientSession
-    app: App
+    app: AppToken
     pending_auth_csrf_tokens: list[str]
 
-    def __init__(self, logger: logging.Logger, session: aiohttp.ClientSession, app: App) -> None:
+    def __init__(self, logger: logging.Logger, session: aiohttp.ClientSession, app: AppToken) -> None:
         self.logger = logger
         self.app = app
         self.session = session

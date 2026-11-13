@@ -36,14 +36,14 @@ MATCHER = re.compile(r'"(.+)" - (.+)(?:,.+)? on (20[0-9][0-9]-[0-9][0-9]-[0-9][0
 class QuoteDownloader:
     loop: asyncio.AbstractEventLoop
     logger: logging.Logger
-    app: token.App
+    app: token.AppToken
     user_token: token.Token
 
     def __init__(self, logger: logging.Logger, loop: asyncio.AbstractEventLoop) -> None:
         self.logger = logger
         self.loop = loop
         self.session = aiohttp.ClientSession(loop=loop)
-        self.app = token.App.load()
+        self.app = token.AppToken.load()
         self.user_token = token.Token.load("snergebot")
 
     def __del__(self) -> None:

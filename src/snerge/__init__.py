@@ -39,7 +39,7 @@ async def main() -> None:
         session = aiohttp.ClientSession()
 
         tokens = token.Tokens(
-            app=token.App.load(),
+            app=token.AppToken.load(),
             chatter=token.Token.load(conf.chatter),
             broadcaster=token.Token.load(conf.broadcaster),
         )
