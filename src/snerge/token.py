@@ -4,41 +4,68 @@
 
 from __future__ import annotations as _future_annotations
 
+from typing import Self
+
+import abc
 import dataclasses
+import json
 import pathlib
-import pickle
+import tempfile
 
 import aiohttp
 
+from .server.util import SetEncoder
+
 TOKENS = pathlib.Path("tokens")
-APP_TOKEN = TOKENS / "_app.token"
+APP_TOKEN = TOKENS / "_app.json"
 
 
 @dataclasses.dataclass
-class App:
-    client_id: str
-    client_secret: str
-    irc_token: str
-    app_token: str
-    redirect_url: str
-    webhook_secret: bytes
+class _Token(abc.ABC):
+    @classmethod
+    def _load(cls, path: pathlib.Path) -> Self:
+        with path.open("rb") as handle:
+            data = json.load(handle)
+
+        if not isinstance(data, dict):
+            raise TypeError
+
+        allowed_fields = {f.name for f in dataclasses.fields(cls)}
+        data = {k: v for k, v in data.items() if k in allowed_fields}
+
+        return cls(**data)
+
+    @property
+    @abc.abstractmethod
+    def path(self) -> pathlib.Path:
+        pass
 
     def store(self) -> None:
-        with APP_TOKEN.open("wb") as handle:
-            pickle.dump(self, handle)
+        path = self.path
+        with tempfile.NamedTemporaryFile(mode="x", dir=path.parent, encoding="utf-8") as handle:
+            json.dump(self, handle, cls=SetEncoder, indent=2)
+            handle.write("\n")
+            handle.flush()
+            pathlib.Path(handle.name).rename(self.path)
+
+
+@dataclasses.dataclass()
+class AppToken(_Token):
+    client_id: str
+    client_secret: str
+    app_token: str
+    redirect_url: str
+    jwt_hmac_key: str = ""
 
     @classmethod
-    def load(cls) -> App:
-        with APP_TOKEN.open("rb") as handle:
-            data = pickle.load(handle)  # noqa: S301 -- I'm sticking with pickle
+    def load(cls) -> AppToken:
+        return cls._load(APP_TOKEN)
 
-            if not isinstance(data, App):
-                raise TypeError("Found incorrect token type: " + type(data))
-
-            return data
+    @property
+    def path(self) -> pathlib.Path:
+        return TOKENS / "_app.json"
 
     async def refresh(self, session: aiohttp.ClientSession) -> None:
-        self.redirect_url = "https://snerge.tea-cats.co.uk/oauth"
         async with session.post(
             "https://id.twitch.tv/oauth2/token",
             params={
@@ -57,17 +84,21 @@ class App:
 
 
 @dataclasses.dataclass
-class Token:
+class Token(_Token):
     user_id: int
     user: str
     access_token: str
     refresh_token: str
 
-    def store(self) -> None:
-        with (TOKENS / f"{self.user}.token").open("wb") as handle:
-            pickle.dump(self, handle)
+    @classmethod
+    def load(cls, user: str) -> Token:
+        return cls._load(TOKENS / f"{user}.json")
 
-    async def renew(self, session: aiohttp.ClientSession, app: App) -> bool:
+    @property
+    def path(self) -> pathlib.Path:
+        return TOKENS / f"{self.user}.json"
+
+    async def renew(self, session: aiohttp.ClientSession, app: AppToken) -> bool:
         async with session.post(
             "https://id.twitch.tv/oauth2/token",
             params={
@@ -90,25 +121,15 @@ class Token:
 
         return True
 
-    @classmethod
-    def load(cls, user: str) -> Token:
-        with (TOKENS / f"{user}.token").open("rb") as handle:
-            data = pickle.load(handle)  # noqa: S301 -- I'm sticking with pickle
-
-            if not isinstance(data, Token):
-                raise TypeError("Found incorrect token type: " + type(data))
-
-            return data
-
 
 class Tokens:
     chatter: Token
     broadcaster: Token
-    oauth_app: App
+    oauth_app: AppToken
 
     __slots__ = "broadcaster", "chatter", "oauth_app"
 
-    def __init__(self, app: App, chatter: Token, broadcaster: Token) -> None:
+    def __init__(self, app: AppToken, chatter: Token, broadcaster: Token) -> None:
         self.chatter = chatter
         self.broadcaster = broadcaster
         self.oauth_app = app

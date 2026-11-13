@@ -4,6 +4,8 @@
 
 from __future__ import annotations as _future_annotations
 
+from typing import TYPE_CHECKING
+
 import asyncio
 import pathlib
 
@@ -16,6 +18,9 @@ from . import bot, quotes, server, token
 from .config import config as load_config
 from .runner import AsyncRunner
 from .util import log
+
+if TYPE_CHECKING:
+    import logging
 
 
 def entrypoint() -> None:
@@ -39,7 +44,7 @@ async def main() -> None:
         session = aiohttp.ClientSession()
 
         tokens = token.Tokens(
-            app=token.App.load(),
+            app=token.AppToken.load(),
             chatter=token.Token.load(conf.chatter),
             broadcaster=token.Token.load(conf.broadcaster),
         )
@@ -48,20 +53,21 @@ async def main() -> None:
         data = prosegen.ProseGen(20)
 
         snerge = bot.SnergeBot(logger.getChild("bot"), session, tokens, conf, data)
+        conn = bot.SnergeConnectionManager(snerge)
 
         # Create the HTTP daemon and attack the handlers.
         logger.info("Running start up processes")
         httpd, _, _ = await asyncio.gather(
             coord.create_onetime_task(
                 "setup-httpd",
-                create_httpd(tokens, session, snerge, buffer, data),
+                create_httpd(logger.getChild("httpd"), tokens, session, conn, buffer, data),
             ),
             coord.create_onetime_task("token-refresh", tokens.refresh(session)),
             coord.create_background_task(quotes.load_data, logger, data),
         )
 
         logger.info("Running main processes")
-        coord.create_main_task("twitch-webhook", snerge.communication())
+        coord.create_main_task("twitch-webhook", conn.communication())
         coord.create_main_task("auto-timer", snerge.auto_time_loop())
 
         await coord
@@ -78,9 +84,10 @@ async def main() -> None:
 
 
 async def create_httpd(
+    logger: logging.Logger,
     tokens: token.Tokens,
     session: aiohttp.ClientSession,
-    snerge: bot.SnergeBot,
+    snerge: bot.SnergeConnectionManager,
     buffer: log.BufferedHandler,
     data: prosegen.ProseGen,
 ) -> web.AppRunner:
@@ -90,9 +97,10 @@ async def create_httpd(
     servlet.router.add_route("GET", "/", _handle_static)
     servlet.router.add_route("GET", "/{path:.+}", _handle_static)
 
-    loglet = server.LoggingHandler(snerge, buffer)
+    loglet = server.LoggingHandler(logger, snerge, buffer)
     servlet.router.add_route("POST", "/log/history", loglet.get_history)
     servlet.router.add_route("GET", "/log/stream", loglet.read_stream)
+    servlet.router.add_route("POST", "/log/reconnect", loglet.reconnect)
 
     whence = server.WhenceHandler(data)
     servlet.router.add_route("POST", "/whence/search", whence.handle_search)
@@ -102,7 +110,11 @@ async def create_httpd(
     servlet.router.add_route("POST", "/predict/predict", predict.make_prediction)
 
     oauth = server.OAuthHandler(log.get_logger("oauth"), session, tokens.oauth_app)
+    servlet.router.add_route("GET", "/me", oauth.whoami)
     servlet.router.add_route("GET", "/oauth", oauth.handle)
+    servlet.router.add_route("GET", "/oauth/mod", oauth.start_human)
+    servlet.router.add_route("GET", "/oauth/bot", oauth.start_bot)
+    servlet.middlewares.append(oauth.verify)
 
     # Create the website container
     _runner = web.AppRunner(

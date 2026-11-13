@@ -11,6 +11,7 @@ import asyncio
 import http
 import json
 import random
+import uuid
 
 import aiohttp
 
@@ -101,96 +102,6 @@ class SnergeBot:
                 await asyncio.sleep(self.config.chat_active_probe)
         except asyncio.CancelledError:
             pass
-
-    async def communication(self) -> None:
-        handler = await self._handle_socket(
-            "wss://eventsub.wss.twitch.tv/ws?keepalive_timeout_seconds=10",
-            register=True,
-            connected=asyncio.Future(),
-        )
-        while handler:
-            handler = await handler
-
-        await self.send_message("sergeSnerge Sleepy time!")
-
-    async def _handle_socket(  # noqa: C901
-        self,
-        endpoint: str,
-        *,
-        register: bool,
-        connected: asyncio.Future[bool],
-    ) -> Handler | None:
-        msg: aiohttp.WSMessage
-        next_call: Handler | None = None
-
-        try:
-            self.logger.info("Connecting to websocket endpoint")
-            async with self.session.ws_connect(endpoint) as socket:
-                async for msg in socket:
-                    if msg.type == aiohttp.WSMsgType.CLOSE:
-                        self.logger.warning("Received close message")
-                        break
-
-                    if msg.type != aiohttp.WSMsgType.TEXT:
-                        self.logger.warning(
-                            "Unexpected %s message type",
-                            msg.type,
-                            extra={"packet": msg},
-                        )
-                        continue
-
-                    data: TwitchEvent = msg.json()
-
-                    match data["metadata"]["message_type"]:
-                        case "session_welcome":
-                            session_id = data["payload"]["session"]["id"]
-                            self.logger.info("Session ID: %s", session_id)
-                            if register:
-                                self.logger.info("Registering subscriptions")
-                                await self.register(session_id)
-                                await self.send_message("Never fear, Snerge is here!")
-                            connected.set_result(True)
-
-                        case "session_keepalive":
-                            pass
-
-                        case "session_reconnect":
-                            self.logger.info("Handling reconnect request")
-                            callback: asyncio.Future[bool] = asyncio.Future()
-                            next_call = self._handle_socket(
-                                data["payload"]["session"]["reconnect_url"],
-                                register=False,
-                                connected=callback,
-                            )
-                            next_call = asyncio.create_task(next_call)
-
-                            self.logger.info("Waiting for new socket to report ready")
-                            await callback
-                            self.logger.info("New socket connected")
-
-                        case "notification":
-                            try:
-                                await self.notification(data["payload"])
-                            except Exception as exp:
-                                self.logger.exception(
-                                    "Error handling notification",
-                                    exc_info=exp,
-                                    extra={"event": data},
-                                )
-
-                        case _:
-                            self.logger.warning(
-                                "Unknown event type: %s",
-                                data["metadata"]["message_type"],
-                            )
-
-        except asyncio.CancelledError:
-            self.logger.info("Ending websocket loop")
-            return None
-
-        self.logger.info("Websocket closed")
-
-        return next_call
 
     async def notification(self, payload: dict[str, Any]) -> None:
         subscription_type = payload["subscription"]["type"]
@@ -315,6 +226,134 @@ class SnergeBot:
             extra={"status": response.status, "sent": sent, "reason": reason},
         )
 
+
+class SnergeConnectionManager:
+    bot: SnergeBot
+    tasks: set[asyncio.Task[None]]
+
+    def __init__(self, bot: SnergeBot) -> None:
+        self.bot = bot
+        self.tasks = set()
+
+    async def communication(self) -> None:
+        await self.reconnect()
+
+        try:
+            while self.tasks:
+                completed, _ = await asyncio.wait(
+                    self.tasks,
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+
+                for task in completed:
+                    self.tasks.discard(task)
+
+                self.bot.logger.info(
+                    "Connection manager state change, %d complete, %d active",
+                    len(completed),
+                    len(self.tasks),
+                )
+        except asyncio.CancelledError:
+            pass
+
+        await self.bot.send_message("sergeSnerge Sleepy time!")
+
+    async def reconnect(self) -> None:
+        initial = self._int_connect(
+            "wss://eventsub.wss.twitch.tv/ws?keepalive_timeout_seconds=10",
+            register=True,
+        )
+
+        await initial.connected_event.wait()
+
+        for task in self.tasks:
+            if task.get_name() != initial.ident:
+                task.cancel()
+
+    def _int_connect(self, endpoint: str, *, register: bool = False) -> SnergeConnectionHandler:
+        handler = SnergeConnectionHandler(self, self.bot, endpoint)
+        task = asyncio.create_task(handler.run(register=register), name=handler.ident)
+        task.add_done_callback(self._on_exit)
+        self.tasks.add(task)
+
+        return handler
+
+    def _on_exit(self, task: asyncio.Task[None]) -> None:
+        if exc := task.exception():
+            self.bot.logger.error("Error in task %s", task.get_name(), exc_info=exc)
+        self.tasks.discard(task)
+
+
+class SnergeConnectionHandler:
+    logger: logging.Logger
+    manager: SnergeConnectionManager
+    bot: SnergeBot
+
+    endpoint: str
+    ident: str
+    connected_event: asyncio.Event
+
+    def __init__(self, manager: SnergeConnectionManager, bot: SnergeBot, endpoint: str) -> None:
+        self.ident = uuid.uuid4().hex[-4:]
+        self.logger = bot.logger.getChild(self.ident)
+        self.logger.info("Creating new connection handler %s", self.ident)
+
+        self.bot = bot
+        self.manager = manager
+        self.endpoint = endpoint
+        self.connected_event = asyncio.Event()
+
+    async def run(self, *, register: bool = False) -> None:
+        msg: aiohttp.WSMessage
+
+        try:
+            self.logger.info("Connecting to websocket endpoint")
+            async with self.bot.session.ws_connect(self.endpoint) as socket:
+                async for msg in socket:
+                    if msg.type == aiohttp.WSMsgType.CLOSE:
+                        self.logger.warning("Received close message")
+                        break
+
+                    if msg.type != aiohttp.WSMsgType.TEXT:
+                        self.logger.warning(
+                            "Unexpected %s message type",
+                            msg.type,
+                            extra={"packet": msg},
+                        )
+                        continue
+
+                    data: TwitchEvent = msg.json()
+
+                    match data["metadata"]["message_type"]:
+                        case "session_welcome":
+                            session_id = data["payload"]["session"]["id"]
+                            self.logger.info("Session ID: %s", session_id)
+                            if register:
+                                self.logger.info("Registering subscriptions")
+                                await self.register(session_id)
+                                await self.bot.send_message("Never fear, Snerge is here!")
+                            self.connected_event.set()
+
+                        case "session_keepalive":
+                            pass
+
+                        case "session_reconnect":
+                            await self._session_reconnect(data)
+
+                        case "notification":
+                            await self._notification(data)
+
+                        case _:
+                            self.logger.warning(
+                                "Unknown event type: %s",
+                                data["metadata"]["message_type"],
+                            )
+
+        except asyncio.CancelledError:
+            self.logger.info("Ending websocket loop due to cancel")
+
+        self.logger.info("Websocket closed")
+
     async def register(self, session_id: str) -> None:
         user_events: dict[str, str] = {
             "channel.chat.message": "1",
@@ -328,12 +367,12 @@ class SnergeBot:
                 "type": event_type,
                 "version": version,
                 "condition": {
-                    "broadcaster_user_id": self.auth.broadcaster_id,
-                    "user_id": self.auth.broadcaster_id,
+                    "broadcaster_user_id": self.bot.auth.broadcaster_id,
+                    "user_id": self.bot.auth.broadcaster_id,
                 },
                 "transport": {"method": "websocket", "session_id": session_id},
             }
-            await self.register_eventsub(self.auth.broadcaster_token, config)
+            await self.register_eventsub(self.bot.auth.broadcaster_token, config)
 
         channel_events: dict[str, str] = {
             "channel.channel_points_custom_reward_redemption.add": "1",
@@ -345,18 +384,18 @@ class SnergeBot:
                 "type": event_type,
                 "version": version,
                 "condition": {
-                    "broadcaster_user_id": self.auth.broadcaster_id,
+                    "broadcaster_user_id": self.bot.auth.broadcaster_id,
                 },
                 "transport": {"method": "websocket", "session_id": session_id},
             }
-            await self.register_eventsub(self.auth.broadcaster_token, config)
+            await self.register_eventsub(self.bot.auth.broadcaster_token, config)
 
     async def register_eventsub(self, auth: str, config: dict[str, Any]) -> None:
-        response = await self.session.post(
+        response = await self.bot.session.post(
             "https://api.twitch.tv/helix/eventsub/subscriptions",
             headers={
                 "Content-type": "application/json",
-                "Client-ID": self.auth.client_id,
+                "Client-ID": self.bot.auth.client_id,
                 "Authorization": "Bearer " + auth,
             },
             json=config,
@@ -382,4 +421,23 @@ class SnergeBot:
                 response.status,
                 config["type"],
                 extra=data,
+            )
+
+    async def _session_reconnect(self, data: TwitchEvent) -> None:
+        self.logger.info("Handling reconnect request")
+        replacement = self.manager._int_connect(  # noqa: SLF001
+            data["payload"]["session"]["reconnect_url"],
+        )
+        self.logger.info("Waiting for new socket to report ready")
+        await replacement.connected_event.wait()
+        self.logger.info("New socket connected")
+
+    async def _notification(self, data: TwitchEvent) -> None:
+        try:
+            await self.bot.notification(data["payload"])
+        except Exception as exp:
+            self.logger.exception(
+                "Error handling notification",
+                exc_info=exp,
+                extra={"event": data},
             )
