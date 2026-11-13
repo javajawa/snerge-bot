@@ -64,7 +64,7 @@ class AsyncRunner:
 
         for result in results:
             if isinstance(result, Exception):
-                self._logger.exception("Error found during shutdown", exc_info=result)
+                self._logger.error("Error found during shutdown", exc_info=result)
 
         self._pool.shutdown(cancel_futures=True)
 
@@ -75,7 +75,7 @@ class AsyncRunner:
     ) -> asyncio.Task[T]:
         task: asyncio.Task[T] = self._loop.create_task(future, name=name)
         self._tasks.add(task)
-        task.add_done_callback(self.process_task_exception)
+        task.add_done_callback(self.process_task_exception)  # type: ignore[arg-type]
         task.add_done_callback(self._tasks.discard)
 
         return task
@@ -92,7 +92,7 @@ class AsyncRunner:
         future.add_done_callback(self._tasks.discard)
         return future
 
-    def process_task_exception[T](self, task: asyncio.Task[T] | asyncio.Future[T]) -> None:
+    def process_task_exception[T](self, task: asyncio.Task[T] | asyncio.Future[T]) -> object:
         if isinstance(task, asyncio.Task):
             self._logger.info("Task %s is %s", task.get_name(), "done" if task.done() else task)
 
@@ -102,6 +102,8 @@ class AsyncRunner:
                 self._logger.error(exception)
         except (asyncio.InvalidStateError, asyncio.CancelledError):
             pass
+
+        return None
 
     def stop_loop[T](self, task: asyncio.Task[T] | None = None) -> None:
         if self._shutdown_event.is_set():

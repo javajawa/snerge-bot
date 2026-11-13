@@ -46,7 +46,7 @@ class GameList:
 
     @property
     def description(self) -> str:
-        return sorted([game.description for game in self.games], key=len, reverse=True)[0]
+        return max([game.description for game in self.games], key=len)
 
     @property
     def tags(self) -> set[str]:

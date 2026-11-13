@@ -8,9 +8,9 @@ version = "0.0.1"
 
 requires-python = ">=3.13, <4"
 dependencies = [
-    "aiohttp~=3.13",
-    "python-json-logger~=4.1",
-    "yarl~=1.23",
+    "aiohttp~=3.14",
+    "python-json-logger~=4.2",
+    "yarl~=1.25",
 ]
 
 [project.optional-dependencies]
@@ -43,6 +43,8 @@ ignore = [
     "D10",
 
     "ASYNC230",  # I'm playing fast-and-loose with open() in aysnc.
+
+    "CPY001",  # Reuse handles copyright notices
 ]
 
 [tool.ruff.lint.pydocstyle]
