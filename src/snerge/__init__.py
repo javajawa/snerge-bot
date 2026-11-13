@@ -4,6 +4,8 @@
 
 from __future__ import annotations as _future_annotations
 
+from typing import TYPE_CHECKING
+
 import asyncio
 import pathlib
 
@@ -16,6 +18,9 @@ from . import bot, quotes, server, token
 from .config import config as load_config
 from .runner import AsyncRunner
 from .util import log
+
+if TYPE_CHECKING:
+    import logging
 
 
 def entrypoint() -> None:
@@ -55,7 +60,7 @@ async def main() -> None:
         httpd, _, _ = await asyncio.gather(
             coord.create_onetime_task(
                 "setup-httpd",
-                create_httpd(tokens, session, conn, buffer, data),
+                create_httpd(logger.getChild("httpd"), tokens, session, conn, buffer, data),
             ),
             coord.create_onetime_task("token-refresh", tokens.refresh(session)),
             coord.create_background_task(quotes.load_data, logger, data),
@@ -79,6 +84,7 @@ async def main() -> None:
 
 
 async def create_httpd(
+    logger: logging.Logger,
     tokens: token.Tokens,
     session: aiohttp.ClientSession,
     snerge: bot.SnergeConnectionManager,
@@ -91,9 +97,10 @@ async def create_httpd(
     servlet.router.add_route("GET", "/", _handle_static)
     servlet.router.add_route("GET", "/{path:.+}", _handle_static)
 
-    loglet = server.LoggingHandler(snerge, buffer)
+    loglet = server.LoggingHandler(logger, snerge, buffer)
     servlet.router.add_route("POST", "/log/history", loglet.get_history)
     servlet.router.add_route("GET", "/log/stream", loglet.read_stream)
+    servlet.router.add_route("POST", "/log/reconnect", loglet.reconnect)
 
     whence = server.WhenceHandler(data)
     servlet.router.add_route("POST", "/whence/search", whence.handle_search)
