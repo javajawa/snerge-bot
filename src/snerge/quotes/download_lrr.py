@@ -15,7 +15,7 @@ from snerge import log
 
 
 async def download_lrr_quotes(logger: log.Logger) -> None:
-    with pathlib.Path("serge-lrr.csv").open("w", encoding="utf-8") as quotes:
+    with pathlib.Path("quotes/serge-lrr.csv").open("w", encoding="utf-8") as quotes:
         writer = csv.DictWriter(quotes, ("id", "date", "author", "quote"))
         async with aiohttp.ClientSession() as session:
             calls = (
