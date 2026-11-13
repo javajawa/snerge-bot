@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 import asyncio
 import http
 import pathlib
+import re
 
 import aiohttp.client
 
@@ -27,6 +28,9 @@ def main() -> None:
 
     downloader = QuoteDownloader(logger, loop)
     downloader()
+
+
+MATCHER = re.compile(r'"(.+)" - (.+)(?:,.+)? on (20[0-9][0-9]-[0-9][0-9]-[0-9][0-9])$')
 
 
 class QuoteDownloader:
@@ -64,6 +68,7 @@ class QuoteDownloader:
 
                 await self.register(session_id)
                 task = self.loop.create_task(self.query())
+                next_id = 0
 
                 while not task.done():
                     msg: aiohttp.WSMessage = await socket.receive(timeout=30)
@@ -75,25 +80,39 @@ class QuoteDownloader:
                         )
                         continue
 
-                    data = msg.json()
+                    data = msg.json()["payload"]
 
-                    if (
-                        data["payload"].get("subscription", {}).get("type")
-                        != "channel.chat.message"
-                    ):
+                    if data.get("subscription", {}).get("type") != "channel.chat.message":
                         continue
-                    if data["payload"]["event"]["chatter_user_id"] == self.user_token.user_id:
+
+                    content: str = data["event"]["message"]["text"]
+
+                    if int(data["event"]["chatter_user_id"]) == self.user_token.user_id:
+                        if content.startswith("!unosearch "):
+                            next_id = int(content.removeprefix("!unosearch "))
                         continue
-                    file.write(data["payload"]["event"]["message"]["text"] + "\n")
+
+                    if content == "No quote found":
+                        continue
+
+                    if not MATCHER.fullmatch(content):
+                        self.logger.warning("Bad response for %d: %s", next_id, content)
+
+                    content = MATCHER.sub(r',\g<3>,"\g<2>","""\g<1>"""', content)
+
+                    file.write(str(next_id))
+                    file.write(content)
+                    file.write("\n")
                     file.flush()
 
         task.cancel()
         await task
 
     async def query(self) -> bool:
-        for quote in range(2973, 2992):
-            await asyncio.sleep(10)
+        await asyncio.sleep(2)
+        for quote in range(3020, 3020):
             await self.send_message(f"!unosearch {quote}")
+            await asyncio.sleep(10)
 
         return True
 
