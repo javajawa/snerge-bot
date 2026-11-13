@@ -111,10 +111,6 @@ code .string
 {
 	color: #f92;
 }
-code::first-line
-{
-	font-size: 0;
-}
 
 p code, li code, details code
 {

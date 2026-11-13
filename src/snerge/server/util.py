@@ -18,7 +18,12 @@ class SetEncoder(json.JSONEncoder):
         if isinstance(o, prosegen.prosegen.Fact):
             return {"id": o.source, "text": o.original}
         if isinstance(o, logging.LogRecord):
-            return {"time": o.created, "level": o.levelname, "message": o.getMessage()}
+            return {
+                "time": o.created,
+                "logger": o.name,
+                "level": o.levelname,
+                "message": o.getMessage(),
+            }
         if dataclasses.is_dataclass(o) and not isinstance(o, type):
             return dataclasses.asdict(o)
         return json.JSONEncoder.default(self, o)
