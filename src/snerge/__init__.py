@@ -119,7 +119,7 @@ async def create_httpd(
     return _runner
 
 
-async def _handle_static(request: web.Request) -> web.FileResponse:
+async def _handle_static(request: web.Request) -> web.StreamResponse:
     content_root = pathlib.Path("html")
     content_types = {
         ".css": "text/css",
@@ -136,6 +136,9 @@ async def _handle_static(request: web.Request) -> web.FileResponse:
         path = path / (path.name + ".html")
     else:
         path = content_root / path_str
+
+    if path.is_dir() and (path / "index.html").exists():
+        return web.HTTPFound(path_str + "/")
 
     return web.FileResponse(
         status=200,
