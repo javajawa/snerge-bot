@@ -48,20 +48,21 @@ async def main() -> None:
         data = prosegen.ProseGen(20)
 
         snerge = bot.SnergeBot(logger.getChild("bot"), session, tokens, conf, data)
+        conn = bot.SnergeConnectionManager(snerge)
 
         # Create the HTTP daemon and attack the handlers.
         logger.info("Running start up processes")
         httpd, _, _ = await asyncio.gather(
             coord.create_onetime_task(
                 "setup-httpd",
-                create_httpd(tokens, session, snerge, buffer, data),
+                create_httpd(tokens, session, conn, buffer, data),
             ),
             coord.create_onetime_task("token-refresh", tokens.refresh(session)),
             coord.create_background_task(quotes.load_data, logger, data),
         )
 
         logger.info("Running main processes")
-        coord.create_main_task("twitch-webhook", snerge.communication())
+        coord.create_main_task("twitch-webhook", conn.communication())
         coord.create_main_task("auto-timer", snerge.auto_time_loop())
 
         await coord
@@ -80,7 +81,7 @@ async def main() -> None:
 async def create_httpd(
     tokens: token.Tokens,
     session: aiohttp.ClientSession,
-    snerge: bot.SnergeBot,
+    snerge: bot.SnergeConnectionManager,
     buffer: log.BufferedHandler,
     data: prosegen.ProseGen,
 ) -> web.AppRunner:
